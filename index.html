@@ -1,0 +1,1641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monthly Cost Calculator</title>
+    <style>
+        :root {
+            --bg: #0d0f18;
+            --surface: #161824;
+            --surface2: #1e2132;
+            --border: #2a2d45;
+            --accent: #7c6cf8;
+            --accent-hover: #9488ff;
+            --text: #e2e4f0;
+            --text-muted: #7a7d9a;
+            --success: #3dd68c;
+            --danger: #ef4444;
+            --warn: #fbbf24;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 24px 20px;
+            font-size: 14px;
+        }
+
+        .container { max-width: 980px; margin: 0 auto; }
+
+        /* ── Header ── */
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .header-left { display: flex; align-items: center; gap: 12px; }
+
+        h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.3px; }
+
+        .storage-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 4px 10px;
+            font-size: 12px;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        .storage-dot {
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            flex-shrink: 0;
+        }
+
+        .storage-badge.file    .storage-dot { background: var(--success); }
+        .storage-badge.file                 { color: var(--text); }
+        .storage-badge.browser              { color: var(--warn); border-color: rgba(245,158,11,0.45); background: rgba(245,158,11,0.08); }
+        .storage-badge.browser .storage-dot { background: var(--warn); animation: pulse-dot 1.5s ease-in-out infinite; }
+        @keyframes pulse-dot { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
+
+        .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+        .month-nav {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 5px 10px;
+        }
+
+        .month-nav .nav-arrow {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 20px;
+            width: 24px;
+            text-align: center;
+            border-radius: 4px;
+            line-height: 1;
+            transition: color 0.15s, background 0.15s;
+            flex-shrink: 0;
+        }
+
+        .month-nav .nav-arrow:hover { color: var(--text); background: var(--surface2); }
+
+        select.currency-select {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 13px;
+            padding: 7px 10px;
+            cursor: pointer;
+            outline: none;
+            font-family: inherit;
+        }
+
+        /* ── Tabs ── */
+        .tabs {
+            display: flex;
+            gap: 2px;
+            margin: 20px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .tab-btn {
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            padding: 8px 18px 10px;
+            transition: color 0.15s, border-color 0.15s;
+            font-family: inherit;
+            margin-bottom: -1px;
+        }
+
+        .tab-btn:hover  { color: var(--text); }
+        .tab-btn.active { color: var(--accent-hover); border-bottom-color: var(--accent); }
+
+        .tab-panel        { display: none; }
+        .tab-panel.active { display: block; }
+
+        /* ── Layout ── */
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 18px;
+            align-items: start;
+        }
+
+        @media (max-width: 720px) {
+            .layout { grid-template-columns: 1fr; }
+            .summary-sticky { position: static !important; }
+        }
+
+        .left-col { display: flex; flex-direction: column; gap: 16px; }
+
+        /* ── Cards ── */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .card-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+        }
+
+        /* ── Inputs ── */
+        input[type="text"], input[type="number"] {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 14px;
+            padding: 9px 12px;
+            outline: none;
+            transition: border-color 0.15s;
+            font-family: inherit;
+        }
+
+        input::placeholder { color: var(--text-muted); }
+        input[type="text"]:focus,
+        input[type="number"]:focus { border-color: var(--accent); }
+
+        input[type="number"] { -moz-appearance: textfield; }
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+        input[type="date"] {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 13px;
+            padding: 7px 10px;
+            outline: none;
+            transition: border-color 0.15s;
+            font-family: inherit;
+            color-scheme: dark;
+            cursor: pointer;
+        }
+
+        input[type="date"]:focus { border-color: var(--accent); }
+
+        /* ── Period row ── */
+        .period-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 18px;
+            flex-wrap: wrap;
+        }
+
+        .period-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-weight: 500;
+            min-width: 42px;
+        }
+
+        .period-arrow { color: var(--text-muted); font-size: 13px; }
+
+        /* ── Account sections ── */
+        .account-section {
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--acc-color, var(--accent));
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 10px;
+            animation: fadeIn 0.15s ease;
+        }
+
+        .account-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 9px 12px;
+            background: var(--surface2);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .account-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--acc-color, var(--accent));
+            flex-shrink: 0;
+        }
+
+        .account-name-input {
+            flex: 1;
+            background: none;
+            border: none;
+            color: var(--text);
+            font-size: 13px;
+            font-weight: 600;
+            outline: none;
+            padding: 0;
+            font-family: inherit;
+            min-width: 0;
+        }
+
+        .account-name-input:focus { color: var(--accent-hover); }
+
+        .account-subtotal {
+            font-size: 13px;
+            font-weight: 500;
+            font-variant-numeric: tabular-nums;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        .btn-del-acct {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 17px;
+            line-height: 1;
+            padding: 0 2px;
+            border-radius: 4px;
+            transition: color 0.15s;
+            flex-shrink: 0;
+        }
+
+        .btn-del-acct:hover { color: var(--danger); }
+
+        .account-body {
+            padding: 12px 14px;
+            background: var(--surface);
+        }
+
+        .account-add-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .account-expense-list { display: flex; flex-direction: column; gap: 5px; }
+
+        /* ── Expense items ── */
+        .expense-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 9px 12px;
+            animation: fadeIn 0.12s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-3px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .expense-name {
+            flex: 1;
+            font-size: 14px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .expense-name.no-label { color: var(--text-muted); font-style: italic; }
+
+        /* ── Personal cost inline editing ── */
+        .p-edit-name {
+            flex: 1;
+            background: none;
+            border: none;
+            border-bottom: 1px solid transparent;
+            color: var(--text);
+            font-size: 14px;
+            font-family: inherit;
+            padding: 1px 0;
+            outline: none;
+            min-width: 0;
+            transition: border-color 0.15s;
+        }
+        .p-edit-name:hover, .p-edit-name:focus { border-bottom-color: var(--accent); }
+        .p-edit-name::placeholder { color: var(--text-muted); font-style: italic; }
+
+        .p-edit-amount {
+            background: none;
+            border: none;
+            border-bottom: 1px solid transparent;
+            color: var(--text);
+            font-size: 14px;
+            font-weight: 500;
+            font-variant-numeric: tabular-nums;
+            font-family: inherit;
+            padding: 1px 0;
+            text-align: right;
+            width: 80px;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+        .p-edit-amount:hover, .p-edit-amount:focus { border-bottom-color: var(--accent); }
+
+        .expense-amount {
+            font-size: 14px;
+            font-weight: 500;
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+        }
+
+        .btn-del {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 18px;
+            line-height: 1;
+            padding: 0 2px;
+            border-radius: 4px;
+            transition: color 0.15s;
+            flex-shrink: 0;
+        }
+
+        .btn-del:hover { color: var(--danger); }
+
+        .empty {
+            text-align: center;
+            color: var(--text-muted);
+            padding: 16px 0;
+            font-size: 12px;
+        }
+
+        /* ── Add account button ── */
+        .btn-add-account {
+            width: 100%;
+            background: none;
+            border: 1px dashed var(--border);
+            border-radius: 10px;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 13px;
+            padding: 10px;
+            transition: all 0.15s;
+            font-family: inherit;
+            margin-top: 4px;
+        }
+
+        .btn-add-account:hover {
+            border-color: var(--accent);
+            color: var(--accent-hover);
+            background: rgba(124,108,248,0.05);
+        }
+
+        /* ── Buttons ── */
+        .btn-add {
+            background: var(--accent);
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            padding: 9px 14px;
+            transition: background 0.15s, transform 0.1s;
+            white-space: nowrap;
+            font-family: inherit;
+        }
+
+        .btn-add:hover { background: var(--accent-hover); }
+        .btn-add:active { transform: scale(0.97); }
+
+        .btn-ghost {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 13px;
+            padding: 8px 14px;
+            transition: all 0.15s;
+            white-space: nowrap;
+            font-family: inherit;
+        }
+
+        .btn-ghost:hover { color: var(--text); border-color: var(--accent); background: var(--surface); }
+
+        /* ── Mortgage ── */
+        .mortgage-row  { display: flex; align-items: center; gap: 12px; }
+        .mortgage-label { flex: 1; font-size: 14px; }
+        .mortgage-note { font-size: 12px; color: var(--text-muted); margin-top: 10px; line-height: 1.5; }
+
+        /* ── Summary ── */
+        .summary-sticky { position: sticky; top: 20px; }
+        .summary-rows   { display: flex; flex-direction: column; gap: 2px; }
+
+        .s-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 9px 2px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .s-row:last-of-type { border-bottom: none; }
+        .s-label { font-size: 13px; color: var(--text-muted); }
+        .s-value { font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; }
+
+        .divider { border: none; border-top: 1px solid var(--border); margin: 6px 0; }
+
+        .s-highlight {
+            background: rgba(124,108,248,0.1);
+            border: 1px solid rgba(124,108,248,0.25);
+            border-radius: 9px;
+            padding: 12px 14px;
+            margin-top: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .s-highlight .s-label { font-size: 14px; font-weight: 600; color: var(--text); }
+        .s-highlight .s-value { font-size: 20px; font-weight: 700; color: var(--accent-hover); }
+
+        .s-gf {
+            background: rgba(61,214,140,0.08);
+            border: 1px solid rgba(61,214,140,0.2);
+            border-radius: 9px;
+            padding: 12px 14px;
+            margin-top: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .s-gf .s-label { font-size: 14px; font-weight: 600; color: var(--text); }
+        .s-gf .s-value { font-size: 20px; font-weight: 700; color: var(--success); }
+
+        .btn-copy {
+            width: 100%;
+            margin-top: 16px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 13px;
+            padding: 10px;
+            transition: all 0.15s;
+            font-family: inherit;
+        }
+
+        .btn-copy:hover { color: var(--text); border-color: var(--accent); background: var(--surface); }
+
+        /* ── Records ── */
+        .records-toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+
+        .records-wrap {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .records-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+
+        .records-table thead tr {
+            background: var(--surface2);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .records-table th {
+            padding: 11px 14px;
+            text-align: right;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        .records-table th:first-child { text-align: left; }
+
+        .records-table tbody tr {
+            border-bottom: 1px solid var(--border);
+            transition: background 0.12s;
+            cursor: pointer;
+        }
+
+        .records-table tbody tr:last-child { border-bottom: none; }
+        .records-table tbody tr:hover      { background: var(--surface2); }
+
+        .records-table td {
+            padding: 12px 14px;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+            color: var(--text);
+        }
+
+        .records-table td:first-child { text-align: left; }
+        .records-table td.month-cell  { font-weight: 500; color: var(--accent-hover); }
+        .records-table td.your-total  { font-weight: 600; }
+        .records-table td.gf-cell     { color: var(--success); font-weight: 600; }
+
+        .records-table tfoot tr { background: var(--surface2); border-top: 2px solid var(--border); }
+
+        .records-table tfoot td {
+            padding: 12px 14px;
+            font-weight: 600;
+            color: var(--text);
+            text-align: right;
+        }
+
+        .records-table tfoot td:first-child { text-align: left; }
+
+        .records-empty {
+            padding: 48px 20px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 13px;
+            line-height: 1.7;
+        }
+
+        .pill {
+            display: inline-block;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            font-size: 11px;
+            padding: 2px 8px;
+            color: var(--text-muted);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .period-sub {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-weight: 400;
+            margin-top: 2px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <header>
+        <div class="header-left">
+            <h1>Monthly Cost Calculator</h1>
+            <div class="storage-badge" id="storageBadge">
+                <div class="storage-dot"></div>
+                <span id="storageLabel">Connecting...</span>
+            </div>
+        </div>
+        <div class="header-right">
+            <select class="currency-select" id="currencySelect" onchange="setCurrency(this.value)">
+                <option value="£">£ GBP</option>
+                <option value="€">€ EUR</option>
+                <option value="$">$ USD</option>
+                <option value="A$">A$ AUD</option>
+                <option value="kr">kr SEK/NOK</option>
+            </select>
+            <div class="month-nav" id="monthNav">
+                <button class="nav-arrow" onclick="changeMonth(-1)" title="Previous month">&#8249;</button>
+                <select id="monthSelect" class="currency-select" onchange="onMonthYearChange()">
+                    <option value="0">January</option>
+                    <option value="1">February</option>
+                    <option value="2">March</option>
+                    <option value="3">April</option>
+                    <option value="4">May</option>
+                    <option value="5">June</option>
+                    <option value="6">July</option>
+                    <option value="7">August</option>
+                    <option value="8">September</option>
+                    <option value="9">October</option>
+                    <option value="10">November</option>
+                    <option value="11">December</option>
+                </select>
+                <select id="yearSelect" class="currency-select" onchange="onMonthYearChange()" style="width:82px"></select>
+                <button class="nav-arrow" onclick="changeMonth(1)" title="Next month">&#8250;</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="tabs">
+        <button class="tab-btn active" id="tab-calc"     onclick="switchTab('calc')">Calculator</button>
+        <button class="tab-btn"        id="tab-personal" onclick="switchTab('personal')">My Costs</button>
+        <button class="tab-btn"        id="tab-records"  onclick="switchTab('records')">Records</button>
+        <button class="tab-btn"        id="tab-settings" onclick="switchTab('settings')">Settings</button>
+    </div>
+
+    <!-- ── Calculator ── -->
+    <div class="tab-panel active" id="panel-calc">
+        <div class="layout">
+            <div class="left-col">
+
+                <div class="card">
+                    <div class="card-title">Shared Expenses</div>
+                    <div class="period-row">
+                        <span class="period-label">Period</span>
+                        <input type="date" id="periodFrom" onchange="savePeriod()" />
+                        <span class="period-arrow">→</span>
+                        <input type="date" id="periodTo" onchange="savePeriod()" />
+                    </div>
+                    <div id="accountsContainer"></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">Mortgage</div>
+                    <div class="mortgage-row">
+                        <span class="mortgage-label">Yan's Monthly mortgage payment</span>
+                        <input type="number" id="mortgage" class="input-amount" placeholder="0.00"
+                               min="0" step="0.01" oninput="saveMortgage()" style="width:120px" />
+                    </div>
+                    <p class="mortgage-note">
+                        total = shared ÷ 2 + mortgage
+                    </p>
+                </div>
+
+            </div>
+
+            <div class="card summary-sticky">
+                <div class="card-title">Summary</div>
+                <div id="summaryRows" class="summary-rows"></div>
+                <button class="btn-copy" onclick="copyToClipboard()">Copy summary to clipboard</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── My Costs ── -->
+    <div class="tab-panel" id="panel-personal">
+        <div class="layout">
+            <div class="left-col">
+
+                <div class="card">
+                    <div class="card-title">Recurring Monthly Costs</div>
+                    <p class="mortgage-note" style="margin-bottom:14px">Fixed costs that repeat every month.</p>
+                    <div class="account-add-row">
+                        <input type="number" id="rAmount" placeholder="0.00" min="0" step="0.01"
+                               style="flex:1"
+                               onkeydown="if(event.key==='Enter')addRecurringCost()" />
+                        <input type="text" id="rName" placeholder="Label (optional)"
+                               style="width:150px"
+                               onkeydown="if(event.key==='Enter')addRecurringCost()" />
+                        <button class="btn-add" onclick="addRecurringCost()">Add</button>
+                    </div>
+                    <div id="recurringList" style="margin-top:10px"></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">This Month's Spending</div>
+                    <p class="mortgage-note" style="margin-bottom:14px">One-off costs for this month only — does not carry over.</p>
+                    <div class="account-add-row">
+                        <input type="number" id="pAmount" placeholder="0.00" min="0" step="0.01"
+                               style="flex:1"
+                               onkeydown="if(event.key==='Enter')addPersonalExpense()" />
+                        <input type="text" id="pName" placeholder="Label (optional)"
+                               style="width:150px"
+                               onkeydown="if(event.key==='Enter')addPersonalExpense()" />
+                        <button class="btn-add" onclick="addPersonalExpense()">Add</button>
+                    </div>
+                    <div id="personalList" style="margin-top:10px"></div>
+                </div>
+
+            </div>
+            <div class="card summary-sticky">
+                <div class="card-title">My Monthly Summary</div>
+                <div id="personalSummary" class="summary-rows"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Records ── -->
+    <div class="tab-panel" id="panel-records">
+        <div class="records-toolbar">
+            <button class="btn-ghost" onclick="exportJSON()">Save backup (.json)</button>
+            <button class="btn-ghost" onclick="document.getElementById('importFile').click()">Load backup</button>
+            <button class="btn-ghost" onclick="exportCSV()">Export CSV</button>
+        </div>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importJSON(this)" />
+        <div class="records-wrap" id="recordsWrap">
+            <div class="records-empty">No data yet — add expenses in the Calculator tab.</div>
+        </div>
+    </div>
+
+    <!-- ── Settings ── -->
+    <div class="tab-panel" id="panel-settings">
+        <div style="max-width:560px">
+            <div class="card">
+                <div class="card-title">Default Calculator Accounts</div>
+                <p class="mortgage-note" style="margin-bottom:16px">
+                    These accounts appear automatically when a new month is opened in the Calculator.
+                    Changes here do not affect months that have already been created.
+                </p>
+                <div id="settingsAccountList"></div>
+                <button class="btn-add-account" onclick="addAccountTemplate()" style="margin-top:12px">+ Add account</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+<script>
+    const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const API    = 'http://localhost:5000/api/data';
+    const COLORS = ['#7c6cf8','#3dd68c','#f59e0b','#38bdf8','#f472b6','#a78bfa'];
+
+    let curYear, curMonth;
+    let allData          = {};
+    let recurringCosts   = [];
+    let accountTemplates = [{ id: 1, name: 'Chase' }, { id: 2, name: 'Amex' }];
+    let mortgage = 0;
+    let currency = '£';
+    let useServer = false;
+
+    /* ── helpers ── */
+    function key(y, m) { return `${y}-${String(m + 1).padStart(2, '0')}`; }
+    function curKey()  { return key(curYear, curMonth); }
+
+    function fmt(n) {
+        return currency + Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }
+
+    function esc(s) {
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function keyToLabel(k) {
+        const [y, m] = k.split('-').map(Number);
+        return `${MONTHS[m - 1]} ${y}`;
+    }
+
+    function fmtDate(iso) {
+        if (!iso) return '';
+        const [y, m, d] = iso.split('-').map(Number);
+        return `${d} ${MONTHS[m - 1].slice(0, 3)} ${y}`;
+    }
+
+    function acctColor(index) { return COLORS[index % COLORS.length]; }
+
+    /* ── period defaults ── */
+    function defaultPeriod(y, m) {
+        // Try to continue from where the previous month's period ended
+        const prevK = (m === 0) ? key(y - 1, 11) : key(y, m - 1);
+        const prev  = allData[prevK];
+
+        if (prev && prev.periodTo) {
+            const [py, pm, pd] = prev.periodTo.split('-').map(Number);
+            const fromDate = new Date(py, pm - 1, pd + 1);   // day after prev end
+            const toDate   = new Date(fromDate.getFullYear(),
+                                      fromDate.getMonth() + 1,
+                                      fromDate.getDate() - 1); // one cycle later
+            const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+            return { from: iso(fromDate), to: iso(toDate) };
+        }
+
+        // Fall back to calendar month
+        const pad  = n => String(n).padStart(2, '0');
+        const last = new Date(y, m + 1, 0).getDate();
+        return { from: `${y}-${pad(m+1)}-01`, to: `${y}-${pad(m+1)}-${pad(last)}` };
+    }
+
+    /* ── data model ── */
+    function defaultAccounts() {
+        const t = Date.now();
+        return accountTemplates.map((tmpl, i) => ({ id: t + i, name: tmpl.name, expenses: [] }));
+    }
+
+    function ensureMonthData() {
+        const k = curKey();
+        if (!allData[k]) {
+            allData[k] = { accounts: defaultAccounts(), mortgage };
+        } else if (allData[k].expenses && !allData[k].accounts) {
+            // migrate old flat format
+            allData[k].accounts = [{ id: Date.now(), name: 'Chase', expenses: allData[k].expenses }, ...defaultAccounts().slice(1)];
+            delete allData[k].expenses;
+        } else if (!allData[k].accounts) {
+            allData[k].accounts = defaultAccounts();
+        }
+        return allData[k];
+    }
+
+    function getAllExpenses() {
+        const d = allData[curKey()];
+        if (!d) return [];
+        if (d.accounts) return d.accounts.flatMap(a => a.expenses);
+        return d.expenses || [];
+    }
+
+    function monthMortgage() {
+        const d = allData[curKey()];
+        return (d && d.mortgage != null) ? d.mortgage : mortgage;
+    }
+
+    /* ── storage status ── */
+    function setStorageBadge(mode) {
+        document.getElementById('storageBadge').className = 'storage-badge ' + mode;
+        document.getElementById('storageLabel').textContent =
+            mode === 'file'    ? 'Saving to file' :
+            mode === 'browser' ? 'Server offline – browser only' :
+                                 'Connecting...';
+    }
+
+    let _reconnectTimer = null;
+    function _scheduleReconnect() {
+        if (_reconnectTimer) return;
+        _reconnectTimer = setTimeout(async () => {
+            _reconnectTimer = null;
+            try {
+                const res = await fetch(API, { signal: AbortSignal.timeout(2000) });
+                if (res.ok) {
+                    useServer = true;
+                    setStorageBadge('file');
+                    // sync any changes made while offline
+                    fetch(API, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(buildPayload()) })
+                        .catch(() => { useServer = false; setStorageBadge('browser'); _scheduleReconnect(); });
+                } else {
+                    _scheduleReconnect();
+                }
+            } catch (_) {
+                _scheduleReconnect();
+            }
+        }, 15000);
+    }
+
+    /* ── persistence ── */
+    async function initStorage() {
+        try {
+            const res = await fetch(API, { signal: AbortSignal.timeout(600) });
+            if (res.ok) {
+                applyPayload(await res.json());
+                useServer = true;
+                setStorageBadge('file');
+                return;
+            }
+        } catch (_) {}
+        loadFromLocalStorage();
+        useServer = false;
+        setStorageBadge('browser');
+    }
+
+    const DEFAULT_TEMPLATES = [{ id: 1, name: 'Chase' }, { id: 2, name: 'Amex' }];
+
+    function applyPayload(payload) {
+        if (payload && typeof payload === 'object') {
+            allData          = payload.data             || {};
+            mortgage         = payload.mortgage         || 0;
+            currency         = payload.currency         || '£';
+            recurringCosts   = payload.recurringCosts   || [];
+            accountTemplates = (payload.accountTemplates && payload.accountTemplates.length)
+                               ? payload.accountTemplates : DEFAULT_TEMPLATES;
+
+            // Merge any recurring costs saved to localStorage while server was unreachable
+            try {
+                const local = JSON.parse(localStorage.getItem('mc_recurring') || '[]');
+                const serverIds = new Set(recurringCosts.map(e => e.id));
+                const extras = local.filter(e => !serverIds.has(e.id));
+                if (extras.length > 0) recurringCosts = [...recurringCosts, ...extras];
+            } catch (_) {}
+        }
+        document.getElementById('currencySelect').value = currency;
+        loadMonthSettings();
+    }
+
+    function loadFromLocalStorage() {
+        try { allData          = JSON.parse(localStorage.getItem('mc_data')      || '{}'); } catch(_) { allData = {}; }
+        try { recurringCosts   = JSON.parse(localStorage.getItem('mc_recurring') || '[]'); } catch(_) { recurringCosts = []; }
+        try {
+            const saved = JSON.parse(localStorage.getItem('mc_templates') || '[]');
+            accountTemplates = saved.length ? saved : DEFAULT_TEMPLATES;
+        } catch(_) { accountTemplates = DEFAULT_TEMPLATES; }
+        mortgage = parseFloat(localStorage.getItem('mc_mortgage')) || 0;
+        currency = localStorage.getItem('mc_currency') || '£';
+        document.getElementById('currencySelect').value = currency;
+        loadMonthSettings();
+    }
+
+    function buildPayload() { return { currency, mortgage, recurringCosts, accountTemplates, data: allData }; }
+
+    function saveAll() {
+        if (useServer) {
+            fetch(API, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(buildPayload()) })
+                .then(r => { if (!r.ok) throw new Error(); })
+                .catch(() => { useServer = false; setStorageBadge('browser'); _scheduleReconnect(); });
+        }
+        localStorage.setItem('mc_data',      JSON.stringify(allData));
+        localStorage.setItem('mc_recurring', JSON.stringify(recurringCosts));
+        localStorage.setItem('mc_templates', JSON.stringify(accountTemplates));
+        localStorage.setItem('mc_mortgage',  mortgage);
+        localStorage.setItem('mc_currency',  currency);
+    }
+
+    /* ── tab nav ── */
+    function switchTab(tab) {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        document.getElementById('tab-' + tab).classList.add('active');
+        document.getElementById('panel-' + tab).classList.add('active');
+        const hideNav = tab === 'records' || tab === 'settings';
+        document.getElementById('monthNav').style.display = hideNav ? 'none' : '';
+        if (tab === 'records')  renderRecords();
+        if (tab === 'personal') { renderRecurring(); renderPersonal(); }
+        if (tab === 'settings') renderSettings();
+    }
+
+    /* ── month nav ── */
+    function populateYearSelect() {
+        const sel      = document.getElementById('yearSelect');
+        const dataYears = Object.keys(allData).map(k => parseInt(k.split('-')[0]));
+        const base     = (new Date()).getFullYear();
+        const minYear  = Math.min(base - 2, ...(dataYears.length ? dataYears : [base]));
+        const maxYear  = Math.max(base + 2, ...(dataYears.length ? dataYears : [base]));
+        sel.innerHTML  = '';
+        for (let y = minYear; y <= maxYear; y++) {
+            const opt = document.createElement('option');
+            opt.value = y; opt.textContent = y;
+            sel.appendChild(opt);
+        }
+        sel.value = curYear;
+    }
+
+    function updateMonthYearSelects() {
+        document.getElementById('monthSelect').value = curMonth;
+        populateYearSelect();
+    }
+
+    function changeMonth(delta) {
+        curMonth += delta;
+        if (curMonth < 0)  { curMonth = 11; curYear--; }
+        if (curMonth > 11) { curMonth = 0;  curYear++; }
+        updateMonthYearSelects();
+        loadMonthSettings();
+        refresh();
+    }
+
+    function onMonthYearChange() {
+        curMonth = parseInt(document.getElementById('monthSelect').value);
+        curYear  = parseInt(document.getElementById('yearSelect').value);
+        loadMonthSettings();
+        refresh();
+    }
+
+    function loadMonthSettings() {
+        const k   = curKey();
+        const d   = allData[k];
+
+        // mortgage
+        const m = (d && d.mortgage != null) ? d.mortgage : mortgage;
+        document.getElementById('mortgage').value = m || '';
+
+        // period: use saved dates, or derive from previous month
+        const def = defaultPeriod(curYear, curMonth);
+        document.getElementById('periodFrom').value = (d && d.periodFrom) || def.from;
+        document.getElementById('periodTo').value   = (d && d.periodTo)   || def.to;
+    }
+
+    function savePeriod() {
+        const from = document.getElementById('periodFrom').value;
+        const to   = document.getElementById('periodTo').value;
+        const d    = ensureMonthData();
+        d.periodFrom = from;
+        d.periodTo   = to;
+        saveAll();
+    }
+
+    /* ── account actions ── */
+    function addAccount() {
+        const d   = ensureMonthData();
+        const id  = Date.now();
+        const num = d.accounts.length + 1;
+        d.accounts.push({ id, name: `Account ${num}`, expenses: [] });
+        saveAll();
+        renderAccounts();
+        // focus the new account's amount input
+        setTimeout(() => document.getElementById(`eAmount-${id}`)?.focus(), 50);
+    }
+
+    function deleteAccount(id) {
+        const d = ensureMonthData();
+        if (d.accounts.length <= 1) return;
+        const acct = d.accounts.find(a => a.id === id);
+        if (acct && acct.expenses.length > 0 &&
+            !confirm(`Delete "${acct.name}" and its ${acct.expenses.length} expense(s)?`)) return;
+        d.accounts = d.accounts.filter(a => a.id !== id);
+        saveAll();
+        refresh();
+    }
+
+    function renameAccount(id, name) {
+        const d    = ensureMonthData();
+        const acct = d.accounts.find(a => a.id === id);
+        if (acct) { acct.name = name.trim() || acct.name; saveAll(); }
+    }
+
+    /* ── expense actions ── */
+    function addExpenseToAccount(accountId) {
+        const amountEl = document.getElementById(`eAmount-${accountId}`);
+        const nameEl   = document.getElementById(`eName-${accountId}`);
+        const amount   = parseFloat(amountEl.value);
+        const name     = nameEl ? nameEl.value.trim() : '';
+
+        if (isNaN(amount) || amount <= 0) { shake(amountEl); amountEl.focus(); return; }
+
+        const d    = ensureMonthData();
+        const acct = d.accounts.find(a => a.id === accountId);
+        if (!acct) return;
+
+        acct.expenses.push({ id: Date.now(), name, amount });
+        amountEl.value = '';
+        if (nameEl) nameEl.value = '';
+
+        saveAll();
+        renderAccounts();
+        // refocus amount in same account
+        document.getElementById(`eAmount-${accountId}`)?.focus();
+        renderSummary();
+    }
+
+    function deleteExpense(accountId, expenseId) {
+        const d    = allData[curKey()];
+        if (!d) return;
+        const acct = d.accounts.find(a => a.id === accountId);
+        if (acct) {
+            acct.expenses = acct.expenses.filter(e => e.id !== expenseId);
+            saveAll();
+            renderAccounts();
+            renderSummary();
+        }
+    }
+
+    function updateExpense(accountId, expenseId, field, value) {
+        const d = allData[curKey()];
+        if (!d || !d.accounts) return;
+        const acct = d.accounts.find(a => a.id === accountId);
+        if (!acct) return;
+        const expense = acct.expenses.find(e => e.id === expenseId);
+        if (!expense) return;
+
+        if (field === 'amount') {
+            const n = parseFloat(value);
+            if (!isNaN(n) && n > 0) expense.amount = n;
+            else return;
+        } else {
+            expense.name = value.trim();
+        }
+
+        saveAll();
+        updateAccountSubtotal(accountId);
+        renderSummary();
+    }
+
+    function updateAccountSubtotal(accountId) {
+        const d = allData[curKey()];
+        if (!d || !d.accounts) return;
+        const acct = d.accounts.find(a => a.id === accountId);
+        if (!acct) return;
+        const subtotal = acct.expenses.reduce((s, e) => s + e.amount, 0);
+        const subtotalEl = document.getElementById(`acctSubtotal-${accountId}`);
+        if (subtotalEl) subtotalEl.textContent = fmt(subtotal);
+    }
+
+    /* ── mortgage / currency ── */
+    function saveMortgage() {
+        const val = parseFloat(document.getElementById('mortgage').value) || 0;
+        const old = mortgage;
+        mortgage  = val;
+        const d   = ensureMonthData();
+        d.mortgage = val;
+
+        // Propagate to future months that still carry the previous default
+        const cur = curKey();
+        Object.keys(allData).forEach(k => {
+            if (k <= cur) return;
+            const m = allData[k];
+            if (m && (m.mortgage === old || m.mortgage == null)) m.mortgage = val;
+        });
+
+        saveAll();
+        renderSummary();
+    }
+
+    function setCurrency(val) { currency = val; saveAll(); refresh(); }
+
+    /* ── recurring costs (global, carry over every month) ── */
+    function addRecurringCost() {
+        const amountEl = document.getElementById('rAmount');
+        const nameEl   = document.getElementById('rName');
+        const amount   = parseFloat(amountEl.value);
+        if (isNaN(amount) || amount <= 0) { shake(amountEl); amountEl.focus(); return; }
+        recurringCosts.push({ id: Date.now(), name: nameEl.value.trim(), amount });
+        amountEl.value = ''; nameEl.value = '';
+        saveAll();
+        renderRecurring();
+        amountEl.focus();
+    }
+
+    function deleteRecurringCost(id) {
+        recurringCosts = recurringCosts.filter(e => e.id !== id);
+        saveAll();
+        renderRecurring();
+    }
+
+    function updateRecurringCost(id, field, value) {
+        const e = recurringCosts.find(x => x.id === id);
+        if (!e) return;
+        if (field === 'amount') {
+            const n = parseFloat(value);
+            if (!isNaN(n) && n > 0) e.amount = n;
+            else return;
+        } else {
+            e.name = value.trim();
+        }
+        saveAll();
+        renderPersonalSummary();
+    }
+
+    function renderRecurring() {
+        const list = document.getElementById('recurringList');
+        if (!list) return;
+        list.innerHTML = recurringCosts.length
+            ? recurringCosts.map((e, i) => `
+                <div class="expense-item">
+                    <input class="p-edit-name" type="text" value="${esc(e.name)}" placeholder="#${i + 1}"
+                           onblur="updateRecurringCost(${e.id},'name',this.value)"
+                           onkeydown="if(event.key==='Enter')this.blur()" />
+                    <input class="p-edit-amount" type="number" value="${e.amount}" min="0" step="0.01"
+                           onblur="updateRecurringCost(${e.id},'amount',this.value)"
+                           onkeydown="if(event.key==='Enter')this.blur()" />
+                    <button class="btn-del" onclick="deleteRecurringCost(${e.id})" title="Remove">&#215;</button>
+                </div>`).join('')
+            : '<div class="empty">No recurring costs yet.</div>';
+        renderPersonalSummary();
+    }
+
+    /* ── personal costs (per-month, does not carry over) ── */
+    function ensurePersonal() {
+        const d = ensureMonthData();
+        if (!d.personal) d.personal = [];
+        return d;
+    }
+
+    function addPersonalExpense() {
+        const amountEl = document.getElementById('pAmount');
+        const nameEl   = document.getElementById('pName');
+        const amount   = parseFloat(amountEl.value);
+        if (isNaN(amount) || amount <= 0) { shake(amountEl); amountEl.focus(); return; }
+        const d = ensurePersonal();
+        d.personal.push({ id: Date.now(), name: nameEl.value.trim(), amount });
+        amountEl.value = '';
+        nameEl.value   = '';
+        saveAll();
+        renderPersonal();
+        amountEl.focus();
+    }
+
+    function deletePersonalExpense(id) {
+        const d = ensurePersonal();
+        d.personal = d.personal.filter(e => e.id !== id);
+        saveAll();
+        renderPersonal();
+    }
+
+    function updatePersonalExpense(id, field, value) {
+        const d = ensurePersonal();
+        const e = d.personal.find(x => x.id === id);
+        if (!e) return;
+        if (field === 'amount') {
+            const n = parseFloat(value);
+            if (!isNaN(n) && n > 0) e.amount = n;
+            else return;
+        } else {
+            e.name = value.trim();
+        }
+        saveAll();
+        renderPersonalSummary();
+    }
+
+    function renderPersonalSummary() {
+        const d       = ensurePersonal();
+        const sumEl   = document.getElementById('personalSummary');
+        if (!sumEl) return;
+        const recurring = recurringCosts.reduce((s, e) => s + e.amount, 0);
+        const extra     = d.personal.reduce((s, e) => s + e.amount, 0);
+        const myHalf    = getAllExpenses().reduce((s, e) => s + e.amount, 0) / 2;
+        const myTotal   = recurring + extra + myHalf;
+        sumEl.innerHTML = `
+            <div class="s-row">
+                <span class="s-label">Recurring costs</span>
+                <span class="s-value">${fmt(recurring)}</span>
+            </div>
+            <div class="s-row">
+                <span class="s-label">This month's spending</span>
+                <span class="s-value">${fmt(extra)}</span>
+            </div>
+            <div class="s-row">
+                <span class="s-label">My half (shared)</span>
+                <span class="s-value">${fmt(myHalf)}</span>
+            </div>
+            <hr class="divider">
+            <div class="s-highlight">
+                <span class="s-label">My total this month</span>
+                <span class="s-value">${fmt(myTotal)}</span>
+            </div>`;
+    }
+
+    function renderPersonal() {
+        const d    = ensurePersonal();
+        const list = document.getElementById('personalList');
+        if (!list) return;
+        list.innerHTML = d.personal.length
+            ? d.personal.map((e, i) => `
+                <div class="expense-item">
+                    <input class="p-edit-name" type="text" value="${esc(e.name)}" placeholder="#${i + 1}"
+                           onblur="updatePersonalExpense(${e.id},'name',this.value)"
+                           onkeydown="if(event.key==='Enter')this.blur()" />
+                    <input class="p-edit-amount" type="number" value="${e.amount}" min="0" step="0.01"
+                           onblur="updatePersonalExpense(${e.id},'amount',this.value)"
+                           onkeydown="if(event.key==='Enter')this.blur()" />
+                    <button class="btn-del" onclick="deletePersonalExpense(${e.id})" title="Remove">&#215;</button>
+                </div>`).join('')
+            : '<div class="empty">No spending recorded this month.</div>';
+        renderPersonalSummary();
+    }
+
+    /* ── settings / account templates ── */
+    function addAccountTemplate() {
+        accountTemplates.push({ id: Date.now(), name: `Account ${accountTemplates.length + 1}` });
+        saveAll();
+        renderSettings();
+        setTimeout(() => {
+            const inputs = document.querySelectorAll('#settingsAccountList .acct-tmpl-name');
+            const last = inputs[inputs.length - 1];
+            if (last) { last.focus(); last.select(); }
+        }, 50);
+    }
+
+    function deleteAccountTemplate(id) {
+        if (accountTemplates.length <= 1) return;
+        accountTemplates = accountTemplates.filter(t => t.id !== id);
+        saveAll();
+        renderSettings();
+    }
+
+    function updateAccountTemplate(id, name) {
+        const t = accountTemplates.find(x => x.id === id);
+        if (t) { t.name = name.trim() || t.name; saveAll(); }
+    }
+
+    function renderSettings() {
+        const list = document.getElementById('settingsAccountList');
+        if (!list) return;
+        list.innerHTML = accountTemplates.map((t, i) => `
+            <div class="expense-item" style="margin-bottom:6px">
+                <span style="min-width:22px;font-size:13px;color:var(--text-muted);flex-shrink:0">${i + 1}.</span>
+                <input class="p-edit-name acct-tmpl-name" type="text" value="${esc(t.name)}"
+                       onblur="updateAccountTemplate(${t.id}, this.value)"
+                       onkeydown="if(event.key==='Enter')this.blur()" />
+                ${accountTemplates.length > 1
+                    ? `<button class="btn-del" onclick="deleteAccountTemplate(${t.id})" title="Remove">&#215;</button>`
+                    : ''}
+            </div>`).join('');
+    }
+
+    /* ── render ── */
+    function refresh() {
+        renderAccounts();
+        renderSummary();
+        renderRecurring();
+        renderPersonal();
+    }
+
+    function renderAccounts() {
+        const d        = ensureMonthData();
+        const accounts = d.accounts;
+        const wrap     = document.getElementById('accountsContainer');
+
+        wrap.innerHTML = accounts.map((acct, idx) => {
+            const color    = acctColor(idx);
+            const subtotal = acct.expenses.reduce((s, e) => s + e.amount, 0);
+            const canDel   = accounts.length > 1;
+
+            const items = acct.expenses.length
+                ? acct.expenses.map((e, i) => {
+                    return `
+                    <div class="expense-item">
+                        <input class="p-edit-name" type="text" value="${esc(e.name)}" placeholder="#${i + 1}"
+                               onblur="updateExpense(${acct.id},${e.id},'name',this.value)"
+                               onkeydown="if(event.key==='Enter')this.blur()" />
+                        <input class="p-edit-amount" type="number" value="${e.amount}" min="0" step="0.01"
+                               onblur="updateExpense(${acct.id},${e.id},'amount',this.value)"
+                               onkeydown="if(event.key==='Enter')this.blur()" />
+                        <button class="btn-del" onclick="deleteExpense(${acct.id},${e.id})" title="Remove">&#215;</button>
+                    </div>`;
+                }).join('')
+                : '<div class="empty">No expenses yet.</div>';
+
+            return `
+            <div class="account-section" style="--acc-color:${color}">
+                <div class="account-header">
+                    <span class="account-dot"></span>
+                    <input class="account-name-input" value="${esc(acct.name)}"
+                           onblur="renameAccount(${acct.id}, this.value)"
+                           onkeydown="if(event.key==='Enter')this.blur()" />
+                    <span class="account-subtotal" id="acctSubtotal-${acct.id}">${fmt(subtotal)}</span>
+                    ${canDel ? `<button class="btn-del-acct" onclick="deleteAccount(${acct.id})" title="Remove account">&#215;</button>` : ''}
+                </div>
+                <div class="account-body">
+                    <div class="account-add-row">
+                        <input type="number" id="eAmount-${acct.id}" placeholder="0.00" min="0" step="0.01"
+                               style="flex:1"
+                               onkeydown="if(event.key==='Enter')addExpenseToAccount(${acct.id})" />
+                        <input type="text"   id="eName-${acct.id}"   placeholder="Label (optional)"
+                               style="width:150px"
+                               onkeydown="if(event.key==='Enter')addExpenseToAccount(${acct.id})" />
+                        <button class="btn-add" onclick="addExpenseToAccount(${acct.id})">Add</button>
+                    </div>
+                    <div class="account-expense-list">${items}</div>
+                </div>
+            </div>`;
+        }).join('');
+
+        wrap.innerHTML += `<button class="btn-add-account" onclick="addAccount()">+ Add account</button>`;
+    }
+
+    function renderSummary() {
+        const expenses = getAllExpenses();
+        const mort     = monthMortgage();
+        const total    = expenses.reduce((s, e) => s + e.amount, 0);
+        const half     = total / 2;
+        const owes     = half + mort;
+
+        // per-account rows
+        const d = allData[curKey()];
+        const acctRows = d && d.accounts && d.accounts.length > 1
+            ? d.accounts.map((a, i) => {
+                const sub   = a.expenses.reduce((s, e) => s + e.amount, 0);
+                const color = acctColor(i);
+                return `<div class="s-row">
+                    <span class="s-label" style="display:flex;align-items:center;gap:6px">
+                        <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${color};flex-shrink:0"></span>
+                        ${esc(a.name)}
+                    </span>
+                    <span class="s-value">${fmt(sub)}</span>
+                </div>`;
+            }).join('') + '<hr class="divider">'
+            : '';
+
+        document.getElementById('summaryRows').innerHTML = `
+            ${acctRows}
+            <div class="s-row">
+                <span class="s-label">Total shared expenses</span>
+                <span class="s-value">${fmt(total)}</span>
+            </div>
+            <div class="s-row">
+                <span class="s-label">&#247; 2 &nbsp;(each half)</span>
+                <span class="s-value">${fmt(half)}</span>
+            </div>
+            <div class="s-row">
+                <span class="s-label">+ Mortgage</span>
+                <span class="s-value">${fmt(mort)}</span>
+            </div>
+            <hr class="divider">
+            <div class="s-gf">
+                <span class="s-label">Girlfriend owes you</span>
+                <span class="s-value">${fmt(owes)}</span>
+            </div>`;
+    }
+
+    function renderRecords() {
+        const wrap    = document.getElementById('recordsWrap');
+        const entries = Object.keys(allData)
+            .filter(k => {
+                const d = allData[k];
+                if (!d) return false;
+                const exps = d.accounts ? d.accounts.flatMap(a => a.expenses) : (d.expenses || []);
+                return exps.length > 0;
+            })
+            .sort((a, b) => b.localeCompare(a));
+
+        if (!entries.length) {
+            wrap.innerHTML = '<div class="records-empty">No data yet — add expenses in the Calculator tab.</div>';
+            return;
+        }
+
+        let totShared = 0, totYour = 0, totGf = 0, totItems = 0;
+
+        const rows = entries.map(k => {
+            const d      = allData[k];
+            const mort   = (d.mortgage != null) ? d.mortgage : mortgage;
+            const exps   = d.accounts ? d.accounts.flatMap(a => a.expenses) : (d.expenses || []);
+            const shared = exps.reduce((s, e) => s + e.amount, 0);
+            const half   = shared / 2;
+            const gfOwes = half + mort;
+            const your   = half;
+
+            totShared += shared;
+            totYour   += your;
+            totGf     += gfOwes;
+            totItems  += exps.length;
+
+            const periodStr = (d.periodFrom && d.periodTo)
+                ? `<div class="period-sub">${fmtDate(d.periodFrom)} → ${fmtDate(d.periodTo)}</div>` : '';
+
+            return `
+            <tr onclick="jumpToMonth('${k}')" title="Open ${keyToLabel(k)} in Calculator">
+                <td class="month-cell">${keyToLabel(k)}${periodStr}</td>
+                <td><span class="pill">${exps.length}</span></td>
+                <td>${fmt(shared)}</td>
+                <td>${fmt(half)}</td>
+                <td>${fmt(mort)}</td>
+                <td class="your-total">${fmt(your)}</td>
+                <td class="gf-cell">${fmt(gfOwes)}</td>
+            </tr>`;
+        }).join('');
+
+        wrap.innerHTML = `
+            <table class="records-table">
+                <thead>
+                    <tr>
+                        <th>Month</th><th>Items</th><th>Shared Total</th>
+                        <th>Each Half</th><th>Mortgage</th><th>Your Total</th><th>GF Owes</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+                <tfoot>
+                    <tr>
+                        <td>Totals &nbsp;<span class="pill">${entries.length} months</span></td>
+                        <td style="text-align:right"><span class="pill">${totItems}</span></td>
+                        <td>${fmt(totShared)}</td>
+                        <td>${fmt(totShared / 2)}</td>
+                        <td>—</td>
+                        <td>${fmt(totYour)}</td>
+                        <td style="color:var(--success)">${fmt(totGf)}</td>
+                    </tr>
+                </tfoot>
+            </table>`;
+    }
+
+    function jumpToMonth(k) {
+        const [y, m] = k.split('-').map(Number);
+        curYear  = y;
+        curMonth = m - 1;
+        updateMonthYearSelects();
+        loadMonthSettings();
+        refresh();
+        switchTab('calc');
+    }
+
+    /* ── copy ── */
+    function copyToClipboard() {
+        const d    = allData[curKey()];
+        const mort = monthMortgage();
+        const sep  = '─'.repeat(38);
+        const pad  = (s, n) => String(s).padEnd(n, ' ');
+
+        const periodStr = (d && d.periodFrom && d.periodTo)
+            ? ` (${fmtDate(d.periodFrom)} → ${fmtDate(d.periodTo)})` : '';
+
+        let text = `Monthly Summary — ${MONTHS[curMonth]} ${curYear}${periodStr}\n${sep}\n`;
+
+        if (d && d.accounts) {
+            let grandTotal = 0;
+            d.accounts.forEach(acct => {
+                if (!acct.expenses.length) return;
+                text += `${acct.name}\n`;
+                acct.expenses.forEach((e, i) => {
+                    const label = (e.name && e.name.trim()) ? e.name : `#${i + 1}`;
+                    text += `  ${pad(label, 22)}${fmt(e.amount)}\n`;
+                });
+                const sub = acct.expenses.reduce((s, e) => s + e.amount, 0);
+                grandTotal += sub;
+                text += `  ${pad('Subtotal:', 22)}${fmt(sub)}\n\n`;
+            });
+            text += `${sep}\n`;
+            const half = grandTotal / 2;
+            const owes = half + mort;
+            text += `${pad('Total shared:', 26)}${fmt(grandTotal)}\n`;
+            text += `${pad('Each half (÷2):', 26)}${fmt(half)}\n`;
+            text += `${pad('Mortgage:', 26)}${fmt(mort)}\n`;
+            text += `${sep}\n`;
+            text += `${pad('Girlfriend owes:', 26)}${fmt(owes)}\n`;
+        }
+
+        const btn = document.querySelector('.btn-copy');
+        navigator.clipboard.writeText(text)
+            .catch(() => {
+                const ta = Object.assign(document.createElement('textarea'), { value: text });
+                document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+            })
+            .finally(() => {
+                btn.textContent = '✓ Copied!';
+                setTimeout(() => { btn.textContent = 'Copy summary to clipboard'; }, 2000);
+            });
+    }
+
+    /* ── export / import ── */
+    function exportJSON() {
+        const blob = new Blob([JSON.stringify(buildPayload(), null, 2)], { type: 'application/json' });
+        const a    = Object.assign(document.createElement('a'), {
+            href: URL.createObjectURL(blob),
+            download: `monthly-calculator-backup-${new Date().toISOString().slice(0,10)}.json`
+        });
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    }
+
+    function importJSON(input) {
+        const file = input.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = e => {
+            try {
+                const payload = JSON.parse(e.target.result);
+                if (!payload.data || typeof payload.data !== 'object') throw new Error();
+                if (!confirm(`Load backup from ${payload.exported ? payload.exported.slice(0,10) : 'unknown date'}?\n\nThis will replace your current data.`)) return;
+                applyPayload(payload);
+                saveAll();
+                refresh();
+                renderRecords();
+                alert('Backup loaded successfully.');
+            } catch(_) {
+                alert('Could not read the file. Make sure it is a valid backup.');
+            }
+            input.value = '';
+        };
+        reader.readAsText(file);
+    }
+
+    function exportCSV() {
+        const entries = Object.keys(allData)
+            .filter(k => {
+                const d = allData[k];
+                const e = d.accounts ? d.accounts.flatMap(a => a.expenses) : (d.expenses || []);
+                return e.length > 0;
+            })
+            .sort((a, b) => b.localeCompare(a));
+
+        if (!entries.length) { alert('No data to export.'); return; }
+
+        const q   = s => `"${String(s).replace(/"/g,'""')}"`;
+        let   csv = 'Month,Period From,Period To,Items,Shared Total,Each Half,Mortgage,Your Total,GF Owes\n';
+
+        entries.forEach(k => {
+            const d    = allData[k];
+            const mort = (d.mortgage != null) ? d.mortgage : mortgage;
+            const exps = d.accounts ? d.accounts.flatMap(a => a.expenses) : (d.expenses || []);
+            const s    = exps.reduce((t, e) => t + e.amount, 0);
+            const half = s / 2;
+            csv += [q(keyToLabel(k)), q(d.periodFrom||''), q(d.periodTo||''),
+                    exps.length, s.toFixed(2), half.toFixed(2),
+                    mort.toFixed(2), half.toFixed(2), (half+mort).toFixed(2)].join(',') + '\n';
+        });
+
+        const a = Object.assign(document.createElement('a'), {
+            href: URL.createObjectURL(new Blob([csv], { type:'text/csv' })),
+            download: `monthly-calculator-${new Date().toISOString().slice(0,10)}.csv`
+        });
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    }
+
+    /* ── shake ── */
+    function shake(el) {
+        el.style.transition  = 'border-color 0s';
+        el.style.borderColor = 'var(--danger)';
+        setTimeout(() => { el.style.transition = ''; el.style.borderColor = ''; }, 600);
+    }
+
+    /* ── init ── */
+    document.addEventListener('DOMContentLoaded', async () => {
+        const now = new Date();
+        curYear   = now.getFullYear();
+        curMonth  = now.getMonth();
+        await initStorage();
+        updateMonthYearSelects();
+        refresh();
+    });
+</script>
+</body>
+</html>

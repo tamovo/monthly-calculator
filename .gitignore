@@ -1,0 +1,13 @@
+# Personal expense data — never commit
+data/
+data.json
+data.json.bak
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# OS
+.DS_Store
+Thumbs.db
