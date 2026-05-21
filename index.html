@@ -751,11 +751,12 @@
             <div class="card">
                 <div class="card-title">Default Calculator Accounts</div>
                 <p class="mortgage-note" style="margin-bottom:16px">
-                    These accounts appear automatically when a new month is opened in the Calculator.
-                    Changes here do not affect months that have already been created.
+                    These accounts appear in the Calculator for every new month.
+                    Saving will also update the current month if it has no expenses yet.
                 </p>
                 <div id="settingsAccountList"></div>
                 <button class="btn-add-account" onclick="addAccountTemplate()" style="margin-top:12px">+ Add account</button>
+                <button class="btn-add" id="btnSaveTemplates" onclick="saveAccountTemplates()" style="margin-top:10px;width:100%">Save accounts</button>
             </div>
         </div>
     </div>
@@ -1271,7 +1272,37 @@
 
     function updateAccountTemplate(id, name) {
         const t = accountTemplates.find(x => x.id === id);
-        if (t) { t.name = name.trim() || t.name; saveAll(); }
+        if (t) { t.name = name.trim() || t.name; }
+    }
+
+    function saveAccountTemplates() {
+        // Flush any pending name edits from focused inputs
+        document.querySelectorAll('#settingsAccountList .acct-tmpl-name').forEach(el => {
+            const id = parseInt(el.dataset.id);
+            const t  = accountTemplates.find(x => x.id === id);
+            if (t) t.name = el.value.trim() || t.name;
+        });
+
+        // If the current month has no expenses yet, rebuild its accounts from the new templates
+        const d = allData[curKey()];
+        const hasExpenses = d && d.accounts && d.accounts.some(a => (a.expenses ?? []).length > 0);
+        if (!hasExpenses) {
+            const ts = Date.now();
+            if (d) d.accounts = accountTemplates.map((tmpl, i) => ({ id: ts + i, name: tmpl.name, expenses: [] }));
+        }
+
+        saveAll();
+
+        // Button feedback
+        const btn = document.getElementById('btnSaveTemplates');
+        const orig = btn.textContent;
+        btn.textContent = '✓ Saved';
+        btn.style.background = 'var(--success)';
+        btn.disabled = true;
+        setTimeout(() => { btn.textContent = orig; btn.style.background = ''; btn.disabled = false; }, 2000);
+
+        switchTab('calc');
+        refresh();
     }
 
     function renderSettings() {
@@ -1281,7 +1312,7 @@
             <div class="expense-item" style="margin-bottom:6px">
                 <span style="min-width:22px;font-size:13px;color:var(--text-muted);flex-shrink:0">${i + 1}.</span>
                 <input class="p-edit-name acct-tmpl-name" type="text" value="${esc(t.name)}"
-                       onblur="updateAccountTemplate(${t.id}, this.value)"
+                       data-id="${t.id}"
                        onkeydown="if(event.key==='Enter')this.blur()" />
                 ${accountTemplates.length > 1
                     ? `<button class="btn-del" onclick="deleteAccountTemplate(${t.id})" title="Remove">&#215;</button>`
