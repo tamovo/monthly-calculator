@@ -864,9 +864,35 @@
     /* ── persistence ── */
     async function initStorage() {
         try {
-            const res = await fetch(API, { signal: AbortSignal.timeout(600) });
+            // 3 s timeout — handles cold starts after a fresh deployment
+            const res = await fetch(API, { signal: AbortSignal.timeout(3000) });
             if (res.ok) {
-                applyPayload(await res.json());
+                const serverPayload = await res.json();
+
+                // Auto-migrate: if D1 is empty but localStorage has data, push it up
+                const d1Empty = !Object.keys(serverPayload.data || {}).length
+                             && !(serverPayload.recurringCosts || []).length
+                             && !serverPayload.mortgage;
+                if (d1Empty) {
+                    let localData = {};
+                    try { localData = JSON.parse(localStorage.getItem('mc_data') || '{}'); } catch(_) {}
+                    if (Object.keys(localData).length > 0) {
+                        try { serverPayload.data            = localData; } catch(_) {}
+                        try { serverPayload.recurringCosts  = JSON.parse(localStorage.getItem('mc_recurring') || '[]'); } catch(_) {}
+                        try { serverPayload.accountTemplates= JSON.parse(localStorage.getItem('mc_templates') || '[]'); } catch(_) {}
+                        serverPayload.mortgage = parseFloat(localStorage.getItem('mc_mortgage')) || 0;
+                        serverPayload.currency = localStorage.getItem('mc_currency') || serverPayload.currency || '£';
+                        applyPayload(serverPayload);
+                        useServer = true;
+                        setStorageBadge('file');
+                        // Push to D1 silently
+                        fetch(API, { method:'POST', headers:{'Content-Type':'application/json'},
+                                     body: JSON.stringify(buildPayload()) }).catch(() => {});
+                        return;
+                    }
+                }
+
+                applyPayload(serverPayload);
                 useServer = true;
                 setStorageBadge('file');
                 return;
