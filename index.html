@@ -69,9 +69,7 @@
 
         .storage-badge.file    .storage-dot { background: var(--success); }
         .storage-badge.file                 { color: var(--text); }
-        .storage-badge.browser              { color: var(--warn); border-color: rgba(245,158,11,0.45); background: rgba(245,158,11,0.08); }
-        .storage-badge.browser .storage-dot { background: var(--warn); animation: pulse-dot 1.5s ease-in-out infinite; }
-        @keyframes pulse-dot { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
+        .storage-badge.browser .storage-dot { background: var(--warn); }
 
         .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
@@ -765,7 +763,7 @@
 </div>
 <script>
     const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-    const API    = 'http://localhost:5000/api/data';
+    const API    = '/api/data';
     const COLORS = ['#7c6cf8','#3dd68c','#f59e0b','#38bdf8','#f472b6','#a78bfa'];
 
     let curYear, curMonth;
@@ -859,31 +857,7 @@
     function setStorageBadge(mode) {
         document.getElementById('storageBadge').className = 'storage-badge ' + mode;
         document.getElementById('storageLabel').textContent =
-            mode === 'file'    ? 'Saving to file' :
-            mode === 'browser' ? 'Server offline – browser only' :
-                                 'Connecting...';
-    }
-
-    let _reconnectTimer = null;
-    function _scheduleReconnect() {
-        if (_reconnectTimer) return;
-        _reconnectTimer = setTimeout(async () => {
-            _reconnectTimer = null;
-            try {
-                const res = await fetch(API, { signal: AbortSignal.timeout(2000) });
-                if (res.ok) {
-                    useServer = true;
-                    setStorageBadge('file');
-                    // sync any changes made while offline
-                    fetch(API, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(buildPayload()) })
-                        .catch(() => { useServer = false; setStorageBadge('browser'); _scheduleReconnect(); });
-                } else {
-                    _scheduleReconnect();
-                }
-            } catch (_) {
-                _scheduleReconnect();
-            }
-        }, 15000);
+            mode === 'file' ? 'Saving to file' : 'Browser storage only';
     }
 
     /* ── persistence ── */
@@ -912,14 +886,6 @@
             recurringCosts   = payload.recurringCosts   || [];
             accountTemplates = (payload.accountTemplates && payload.accountTemplates.length)
                                ? payload.accountTemplates : DEFAULT_TEMPLATES;
-
-            // Merge any recurring costs saved to localStorage while server was unreachable
-            try {
-                const local = JSON.parse(localStorage.getItem('mc_recurring') || '[]');
-                const serverIds = new Set(recurringCosts.map(e => e.id));
-                const extras = local.filter(e => !serverIds.has(e.id));
-                if (extras.length > 0) recurringCosts = [...recurringCosts, ...extras];
-            } catch (_) {}
         }
         document.getElementById('currencySelect').value = currency;
         loadMonthSettings();
@@ -943,8 +909,7 @@
     function saveAll() {
         if (useServer) {
             fetch(API, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(buildPayload()) })
-                .then(r => { if (!r.ok) throw new Error(); })
-                .catch(() => { useServer = false; setStorageBadge('browser'); _scheduleReconnect(); });
+                .catch(() => {});
         }
         localStorage.setItem('mc_data',      JSON.stringify(allData));
         localStorage.setItem('mc_recurring', JSON.stringify(recurringCosts));
