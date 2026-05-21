@@ -11,3 +11,7 @@ __pycache__/
 # OS
 .DS_Store
 Thumbs.db
+
+# Cloudflare local dev only — not needed by Pages CI
+wrangler.toml
+.wrangler/
