@@ -73,13 +73,17 @@ async function handlePost(request, env) {
 }
 
 export async function onRequest({ request, env }) {
+  // Normalise binding name to DB regardless of wrangler.toml variable name
+  const db = env.monthly_calculator_db ?? env.DB;
+  const normEnv = { ...env, DB: db };
+
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS });
   }
 
   let res;
-  if      (request.method === 'GET')  res = await handleGet(env);
-  else if (request.method === 'POST') res = await handlePost(request, env);
+  if      (request.method === 'GET')  res = await handleGet(normEnv);
+  else if (request.method === 'POST') res = await handlePost(request, normEnv);
   else                                res = new Response('Method Not Allowed', { status: 405 });
 
   const headers = new Headers(res.headers);
