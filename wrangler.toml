@@ -1,8 +1,0 @@
-name = "monthly-calculator"
-compatibility_date = "2025-01-01"
-pages_build_output_dir = "."
-
-[[d1_databases]]
-binding = "monthly_calculator_db"
-database_name = "monthly-calculator-db"
-database_id = "1e3cbfcc-31a8-4fb1-86e9-92c994267d4e"
