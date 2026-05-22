@@ -984,30 +984,45 @@
             if (res.ok) {
                 const serverPayload = await res.json();
 
-                // Auto-migrate: if D1 is empty but localStorage has data, push it up
+                // Read localStorage once for merge decisions
+                let localData = {};
+                try { localData = JSON.parse(localStorage.getItem('mc_data') || '{}'); } catch(_) {}
+
                 const d1Empty = !Object.keys(serverPayload.data || {}).length
                              && !(serverPayload.recurringCosts || []).length
                              && !serverPayload.mortgage;
-                if (d1Empty) {
-                    let localData = {};
-                    try { localData = JSON.parse(localStorage.getItem('mc_data') || '{}'); } catch(_) {}
-                    if (Object.keys(localData).length > 0) {
-                        try { serverPayload.data             = localData; } catch(_) {}
-                        try { serverPayload.recurringCosts   = JSON.parse(localStorage.getItem('mc_recurring') || '[]'); } catch(_) {}
-                        try { serverPayload.accountTemplates = JSON.parse(localStorage.getItem('mc_templates') || '[]'); } catch(_) {}
-                        serverPayload.mortgage          = parseFloat(localStorage.getItem('mc_mortgage')) || 0;
-                        serverPayload.salary            = parseFloat(localStorage.getItem('mc_salary'))   || 0;
-                        serverPayload.currency          = localStorage.getItem('mc_currency') || serverPayload.currency || '£';
-                        serverPayload.fixedPaymentLabel = localStorage.getItem('mc_fixed_label')   || 'Fixed Payment';
-                        serverPayload.partnerName       = localStorage.getItem('mc_partner_name') || 'Partner';
-                        applyPayload(serverPayload);
-                        useServer = true;
-                        setStorageBadge('file');
-                        // Push to D1 silently
-                        fetch(API, { method:'POST', headers:{'Content-Type':'application/json'},
-                                     body: JSON.stringify(buildPayload()) }).catch(() => {});
-                        return;
-                    }
+
+                // Case 1: D1 completely empty — full migration from localStorage
+                if (d1Empty && Object.keys(localData).length > 0) {
+                    serverPayload.data            = localData;
+                    try { serverPayload.recurringCosts   = JSON.parse(localStorage.getItem('mc_recurring') || '[]'); } catch(_) {}
+                    try { serverPayload.accountTemplates = JSON.parse(localStorage.getItem('mc_templates') || '[]'); } catch(_) {}
+                    serverPayload.mortgage          = parseFloat(localStorage.getItem('mc_mortgage')) || 0;
+                    serverPayload.salary            = parseFloat(localStorage.getItem('mc_salary'))   || 0;
+                    serverPayload.currency          = localStorage.getItem('mc_currency') || serverPayload.currency || '£';
+                    serverPayload.fixedPaymentLabel = localStorage.getItem('mc_fixed_label')   || 'Fixed Payment';
+                    serverPayload.partnerName       = localStorage.getItem('mc_partner_name') || 'Partner';
+                    applyPayload(serverPayload);
+                    useServer = true;
+                    setStorageBadge('file');
+                    fetch(API, { method:'POST', headers:{'Content-Type':'application/json'},
+                                 body: JSON.stringify(buildPayload()) }).catch(() => {});
+                    return;
+                }
+
+                // Case 2: D1 has data, but localStorage has months D1 doesn't —
+                // merge those missing months in (handles server outage windows)
+                const d1Keys    = new Set(Object.keys(serverPayload.data || {}));
+                const localOnly = Object.keys(localData).filter(k => !d1Keys.has(k));
+                if (localOnly.length > 0) {
+                    serverPayload.data = { ...(serverPayload.data || {}),
+                                           ...Object.fromEntries(localOnly.map(k => [k, localData[k]])) };
+                    applyPayload(serverPayload);
+                    useServer = true;
+                    setStorageBadge('file');
+                    fetch(API, { method:'POST', headers:{'Content-Type':'application/json'},
+                                 body: JSON.stringify(buildPayload()) }).catch(() => {});
+                    return;
                 }
 
                 applyPayload(serverPayload);
