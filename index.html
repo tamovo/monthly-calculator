@@ -301,18 +301,68 @@
             margin-bottom: 10px;
         }
 
-        .account-expense-list { display: flex; flex-direction: column; gap: 5px; }
+        .account-expense-list { display: flex; flex-direction: column; }
 
-        /* ── Expense items ── */
+        /* ── Expense items (flat rows) ── */
         .expense-item {
             display: flex;
             align-items: center;
             gap: 10px;
+            padding: 9px 0;
+            border-bottom: 1px solid var(--border);
+            animation: fadeIn 0.12s ease;
+        }
+
+        .expense-amount-group {
+            display: flex;
+            align-items: center;
+            gap: 1px;
+            flex-shrink: 0;
+        }
+        .expense-currency-sym {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        /* ── Add-row amount wrapper (currency prefix + number) ── */
+        .add-amount-wrap {
+            display: flex;
+            align-items: center;
+            gap: 3px;
             background: var(--surface2);
             border: 1px solid var(--border);
             border-radius: 8px;
-            padding: 9px 12px;
-            animation: fadeIn 0.12s ease;
+            padding: 0 12px;
+            transition: border-color 0.15s;
+        }
+        .add-amount-wrap:focus-within { border-color: var(--accent); }
+        .add-amount-wrap input[type="number"] {
+            border: none !important;
+            background: none;
+            padding: 9px 0;
+            width: 70px;
+        }
+        .add-amount-wrap span {
+            color: var(--text-muted);
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        /* ── Subtotal row at bottom of expense list ── */
+        .expense-subtotal-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0 2px;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+        .subtotal-value {
+            font-variant-numeric: tabular-nums;
+            color: var(--text);
+            font-weight: 600;
+            font-size: 13px;
         }
 
         @keyframes fadeIn {
@@ -497,6 +547,27 @@
 
         .s-gf .s-label { font-size: 14px; font-weight: 600; color: var(--text); }
         .s-gf .s-value { font-size: 20px; font-weight: 700; color: var(--success); }
+
+        /* ── Left-over row (My Costs summary) ── */
+        .s-leftover {
+            border-radius: 9px;
+            padding: 12px 14px;
+            margin-top: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .s-leftover.positive {
+            background: rgba(61,214,140,0.08);
+            border: 1px solid rgba(61,214,140,0.2);
+        }
+        .s-leftover.negative {
+            background: rgba(239,68,68,0.08);
+            border: 1px solid rgba(239,68,68,0.2);
+        }
+        .s-leftover .s-label { font-size: 14px; font-weight: 600; color: var(--text); }
+        .s-leftover.positive .s-value { font-size: 20px; font-weight: 700; color: var(--success); }
+        .s-leftover.negative .s-value { font-size: 20px; font-weight: 700; color: var(--danger); }
 
         .btn-copy {
             width: 100%;
@@ -698,30 +769,47 @@
             <div class="left-col">
 
                 <div class="card">
-                    <div class="card-title">Recurring Monthly Costs</div>
-                    <p class="mortgage-note" style="margin-bottom:14px">Fixed costs that repeat every month.</p>
+                    <div class="card-title">Monthly Salary</div>
+                    <p class="mortgage-note" style="margin-bottom:10px">Your take-home pay — used to calculate what's left after spending.</p>
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <span style="flex:1;font-size:13px;color:var(--text-muted)">Take-home pay</span>
+                        <div class="add-amount-wrap">
+                            <span id="salaryCurrencyPrefix">£</span>
+                            <input type="number" id="salaryInput" placeholder="0.00" min="0" step="0.01"
+                                   oninput="saveSalary()" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">Monthly Recurring Costs</div>
+                    <p class="mortgage-note" style="margin-bottom:14px">Fixed costs that carry forward every month.</p>
                     <div class="account-add-row">
-                        <input type="number" id="rAmount" placeholder="0.00" min="0" step="0.01"
-                               style="flex:1"
-                               onkeydown="if(event.key==='Enter')addRecurringCost()" />
                         <input type="text" id="rName" placeholder="Label (optional)"
-                               style="width:150px"
+                               style="flex:1;min-width:0"
                                onkeydown="if(event.key==='Enter')addRecurringCost()" />
+                        <div class="add-amount-wrap">
+                            <span id="rCurrencyPrefix">£</span>
+                            <input type="number" id="rAmount" placeholder="0.00" min="0" step="0.01"
+                                   onkeydown="if(event.key==='Enter')addRecurringCost()" />
+                        </div>
                         <button class="btn-add" onclick="addRecurringCost()">Add</button>
                     </div>
                     <div id="recurringList" style="margin-top:10px"></div>
                 </div>
 
                 <div class="card">
-                    <div class="card-title">This Month's Spending</div>
-                    <p class="mortgage-note" style="margin-bottom:14px">One-off costs for this month only — does not carry over.</p>
+                    <div class="card-title">One-off Spending</div>
+                    <p class="mortgage-note" style="margin-bottom:14px">Extra costs just for this month — won't carry over.</p>
                     <div class="account-add-row">
-                        <input type="number" id="pAmount" placeholder="0.00" min="0" step="0.01"
-                               style="flex:1"
-                               onkeydown="if(event.key==='Enter')addPersonalExpense()" />
                         <input type="text" id="pName" placeholder="Label (optional)"
-                               style="width:150px"
+                               style="flex:1;min-width:0"
                                onkeydown="if(event.key==='Enter')addPersonalExpense()" />
+                        <div class="add-amount-wrap">
+                            <span id="pCurrencyPrefix">£</span>
+                            <input type="number" id="pAmount" placeholder="0.00" min="0" step="0.01"
+                                   onkeydown="if(event.key==='Enter')addPersonalExpense()" />
+                        </div>
                         <button class="btn-add" onclick="addPersonalExpense()">Add</button>
                     </div>
                     <div id="personalList" style="margin-top:10px"></div>
@@ -750,6 +838,17 @@
     <!-- ── Settings ── -->
     <div class="tab-panel" id="panel-settings">
         <div style="max-width:560px">
+            <div class="card">
+                <div class="card-title">Partner Name</div>
+                <p class="mortgage-note" style="margin-bottom:12px">
+                    Shown in the Summary ("Partner owes you") and Records table header.
+                </p>
+                <input type="text" id="partnerNameInput" class="p-edit-name"
+                       placeholder="e.g. Partner, Boyfriend, Girlfriend, Alex"
+                       style="width:100%;box-sizing:border-box" />
+                <button class="btn-add" id="btnSavePartnerName" onclick="savePartnerName()"
+                        style="margin-top:10px;width:100%">Save name</button>
+            </div>
             <div class="card">
                 <div class="card-title">Fixed Payment Label</div>
                 <p class="mortgage-note" style="margin-bottom:12px">
@@ -784,9 +883,11 @@
     let allData          = {};
     let recurringCosts   = [];
     let accountTemplates = [{ id: 1, name: 'Chase' }, { id: 2, name: 'Amex' }];
-    let mortgage = 0;
-    let currency = '£';
+    let mortgage    = 0;
+    let salary      = 0;
+    let currency    = '£';
     let fixedPaymentLabel = 'Fixed Payment';
+    let partnerName       = 'Partner';
     let useServer = false;
 
     /* ── helpers ── */
@@ -895,8 +996,10 @@
                         try { serverPayload.recurringCosts   = JSON.parse(localStorage.getItem('mc_recurring') || '[]'); } catch(_) {}
                         try { serverPayload.accountTemplates = JSON.parse(localStorage.getItem('mc_templates') || '[]'); } catch(_) {}
                         serverPayload.mortgage          = parseFloat(localStorage.getItem('mc_mortgage')) || 0;
+                        serverPayload.salary            = parseFloat(localStorage.getItem('mc_salary'))   || 0;
                         serverPayload.currency          = localStorage.getItem('mc_currency') || serverPayload.currency || '£';
-                        serverPayload.fixedPaymentLabel = localStorage.getItem('mc_fixed_label') || 'Fixed Payment';
+                        serverPayload.fixedPaymentLabel = localStorage.getItem('mc_fixed_label')   || 'Fixed Payment';
+                        serverPayload.partnerName       = localStorage.getItem('mc_partner_name') || 'Partner';
                         applyPayload(serverPayload);
                         useServer = true;
                         setStorageBadge('file');
@@ -924,11 +1027,13 @@
         if (payload && typeof payload === 'object') {
             allData           = payload.data             || {};
             mortgage          = payload.mortgage         || 0;
+            salary            = payload.salary           || 0;
             currency          = payload.currency         || '£';
             recurringCosts    = payload.recurringCosts   || [];
             accountTemplates  = (payload.accountTemplates && payload.accountTemplates.length)
                                 ? payload.accountTemplates : DEFAULT_TEMPLATES;
             fixedPaymentLabel = payload.fixedPaymentLabel || fixedPaymentLabel;
+            partnerName       = payload.partnerName       || partnerName;
         }
         document.getElementById('currencySelect').value = currency;
         loadMonthSettings();
@@ -942,15 +1047,17 @@
             const saved = JSON.parse(localStorage.getItem('mc_templates') || '[]');
             accountTemplates = saved.length ? saved : DEFAULT_TEMPLATES;
         } catch(_) { accountTemplates = DEFAULT_TEMPLATES; }
-        mortgage          = parseFloat(localStorage.getItem('mc_mortgage')) || 0;
-        currency          = localStorage.getItem('mc_currency') || '£';
-        fixedPaymentLabel = localStorage.getItem('mc_fixed_label') || 'Fixed Payment';
+        mortgage          = parseFloat(localStorage.getItem('mc_mortgage'))    || 0;
+        salary            = parseFloat(localStorage.getItem('mc_salary'))     || 0;
+        currency          = localStorage.getItem('mc_currency')               || '£';
+        fixedPaymentLabel = localStorage.getItem('mc_fixed_label')             || 'Fixed Payment';
+        partnerName       = localStorage.getItem('mc_partner_name')           || 'Partner';
         document.getElementById('currencySelect').value = currency;
         loadMonthSettings();
         applyFixedPaymentLabelUI();
     }
 
-    function buildPayload() { return { currency, mortgage, fixedPaymentLabel, recurringCosts, accountTemplates, data: allData }; }
+    function buildPayload() { return { currency, mortgage, salary, fixedPaymentLabel, partnerName, recurringCosts, accountTemplates, data: allData }; }
 
     function saveAll() {
         if (useServer) {
@@ -961,8 +1068,10 @@
         localStorage.setItem('mc_recurring',  JSON.stringify(recurringCosts));
         localStorage.setItem('mc_templates',  JSON.stringify(accountTemplates));
         localStorage.setItem('mc_mortgage',   mortgage);
+        localStorage.setItem('mc_salary',     salary);
         localStorage.setItem('mc_currency',   currency);
-        localStorage.setItem('mc_fixed_label', fixedPaymentLabel);
+        localStorage.setItem('mc_fixed_label',   fixedPaymentLabel);
+        localStorage.setItem('mc_partner_name', partnerName);
     }
 
     /* ── tab nav ── */
@@ -1074,7 +1183,8 @@
         const amount   = parseFloat(amountEl.value);
         const name     = nameEl ? nameEl.value.trim() : '';
 
-        if (isNaN(amount) || amount <= 0) { shake(amountEl); amountEl.focus(); return; }
+        const shakeEl = amountEl.closest('.add-amount-wrap') || amountEl;
+        if (isNaN(amount) || amount <= 0) { shake(shakeEl); amountEl.focus(); return; }
 
         const d    = ensureMonthData();
         const acct = d.accounts.find(a => a.id === accountId);
@@ -1161,12 +1271,13 @@
         const amountEl = document.getElementById('rAmount');
         const nameEl   = document.getElementById('rName');
         const amount   = parseFloat(amountEl.value);
-        if (isNaN(amount) || amount <= 0) { shake(amountEl); amountEl.focus(); return; }
+        const shakeEl  = amountEl.closest('.add-amount-wrap') || amountEl;
+        if (isNaN(amount) || amount <= 0) { shake(shakeEl); amountEl.focus(); return; }
         recurringCosts.push({ id: Date.now(), name: nameEl.value.trim(), amount });
         amountEl.value = ''; nameEl.value = '';
         saveAll();
         renderRecurring();
-        amountEl.focus();
+        nameEl.focus();
     }
 
     function deleteRecurringCost(id) {
@@ -1198,9 +1309,12 @@
                     <input class="p-edit-name" type="text" value="${esc(e.name)}" placeholder="#${i + 1}"
                            onblur="updateRecurringCost(${e.id},'name',this.value)"
                            onkeydown="if(event.key==='Enter')this.blur()" />
-                    <input class="p-edit-amount" type="number" value="${e.amount}" min="0" step="0.01"
-                           onblur="updateRecurringCost(${e.id},'amount',this.value)"
-                           onkeydown="if(event.key==='Enter')this.blur()" />
+                    <div class="expense-amount-group">
+                        <span class="expense-currency-sym">${currency}</span>
+                        <input class="p-edit-amount" type="number" value="${e.amount}" min="0" step="0.01"
+                               onblur="updateRecurringCost(${e.id},'amount',this.value)"
+                               onkeydown="if(event.key==='Enter')this.blur()" />
+                    </div>
                     <button class="btn-del" onclick="deleteRecurringCost(${e.id})" title="Remove">&#215;</button>
                 </div>`).join('')
             : '<div class="empty">No recurring costs yet.</div>';
@@ -1218,14 +1332,15 @@
         const amountEl = document.getElementById('pAmount');
         const nameEl   = document.getElementById('pName');
         const amount   = parseFloat(amountEl.value);
-        if (isNaN(amount) || amount <= 0) { shake(amountEl); amountEl.focus(); return; }
+        const shakeEl  = amountEl.closest('.add-amount-wrap') || amountEl;
+        if (isNaN(amount) || amount <= 0) { shake(shakeEl); amountEl.focus(); return; }
         const d = ensurePersonal();
         d.personal.push({ id: Date.now(), name: nameEl.value.trim(), amount });
         amountEl.value = '';
         nameEl.value   = '';
         saveAll();
         renderPersonal();
-        amountEl.focus();
+        nameEl.focus();
     }
 
     function deletePersonalExpense(id) {
@@ -1251,31 +1366,62 @@
     }
 
     function renderPersonalSummary() {
-        const d       = ensurePersonal();
-        const sumEl   = document.getElementById('personalSummary');
+        // Keep currency prefixes in sync
+        ['rCurrencyPrefix','pCurrencyPrefix','salaryCurrencyPrefix'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = currency;
+        });
+
+        const d   = ensurePersonal();
+        const sumEl = document.getElementById('personalSummary');
         if (!sumEl) return;
+
         const recurring = recurringCosts.reduce((s, e) => s + e.amount, 0);
         const extra     = d.personal.reduce((s, e) => s + e.amount, 0);
         const myHalf    = getAllExpenses().reduce((s, e) => s + e.amount, 0) / 2;
         const myTotal   = recurring + extra + myHalf;
+
+        const salaryRow = salary > 0
+            ? `<div class="s-row">
+                   <span class="s-label">Monthly salary</span>
+                   <span class="s-value">${fmt(salary)}</span>
+               </div>
+               <hr class="divider">`
+            : '';
+
+        const leftOverRow = salary > 0
+            ? (() => {
+                const left    = salary - myTotal;
+                const cls     = left >= 0 ? 'positive' : 'negative';
+                const leftFmt = left >= 0 ? fmt(left) : `−${fmt(left)}`;
+                return `<hr class="divider">
+                        <div class="s-leftover ${cls}">
+                            <span class="s-label">Left over this month</span>
+                            <span class="s-value">${leftFmt}</span>
+                        </div>`;
+            })()
+            : '';
+
         sumEl.innerHTML = `
+            ${salaryRow}
             <div class="s-row">
                 <span class="s-label">Recurring costs</span>
                 <span class="s-value">${fmt(recurring)}</span>
             </div>
             <div class="s-row">
-                <span class="s-label">This month's spending</span>
+                <span class="s-label">One-off spending</span>
                 <span class="s-value">${fmt(extra)}</span>
             </div>
             <div class="s-row">
-                <span class="s-label">My half (shared)</span>
+                <span class="s-label">Half of shared expenses</span>
                 <span class="s-value">${fmt(myHalf)}</span>
             </div>
             <hr class="divider">
             <div class="s-highlight">
-                <span class="s-label">My total this month</span>
+                <span class="s-label">My total spending</span>
                 <span class="s-value">${fmt(myTotal)}</span>
-            </div>`;
+            </div>
+            ${leftOverRow}`;
     }
 
     function renderPersonal() {
@@ -1288,9 +1434,12 @@
                     <input class="p-edit-name" type="text" value="${esc(e.name)}" placeholder="#${i + 1}"
                            onblur="updatePersonalExpense(${e.id},'name',this.value)"
                            onkeydown="if(event.key==='Enter')this.blur()" />
-                    <input class="p-edit-amount" type="number" value="${e.amount}" min="0" step="0.01"
-                           onblur="updatePersonalExpense(${e.id},'amount',this.value)"
-                           onkeydown="if(event.key==='Enter')this.blur()" />
+                    <div class="expense-amount-group">
+                        <span class="expense-currency-sym">${currency}</span>
+                        <input class="p-edit-amount" type="number" value="${e.amount}" min="0" step="0.01"
+                               onblur="updatePersonalExpense(${e.id},'amount',this.value)"
+                               onkeydown="if(event.key==='Enter')this.blur()" />
+                    </div>
                     <button class="btn-del" onclick="deletePersonalExpense(${e.id})" title="Remove">&#215;</button>
                 </div>`).join('')
             : '<div class="empty">No spending recorded this month.</div>';
@@ -1321,12 +1470,37 @@
         if (t) { t.name = name.trim() || t.name; }
     }
 
-    /* ── fixed payment label ── */
+    /* ── fixed payment label + salary + partner name ── */
     function applyFixedPaymentLabelUI() {
-        const rowLbl = document.getElementById('mortgageRowLabel');
-        const input  = document.getElementById('fixedPaymentLabelInput');
-        if (rowLbl) rowLbl.textContent = fixedPaymentLabel;
-        if (input)  input.value        = fixedPaymentLabel;
+        const rowLbl    = document.getElementById('mortgageRowLabel');
+        const fixedIn   = document.getElementById('fixedPaymentLabelInput');
+        const salIn     = document.getElementById('salaryInput');
+        const partnerIn = document.getElementById('partnerNameInput');
+        if (rowLbl)    rowLbl.textContent = fixedPaymentLabel;
+        if (fixedIn)   fixedIn.value      = fixedPaymentLabel;
+        if (salIn)     salIn.value        = salary || '';
+        if (partnerIn) partnerIn.value    = partnerName;
+    }
+
+    function saveSalary() {
+        salary = parseFloat(document.getElementById('salaryInput').value) || 0;
+        saveAll();
+        renderPersonalSummary();
+    }
+
+    function savePartnerName() {
+        const val = (document.getElementById('partnerNameInput').value || '').trim();
+        if (!val) return;
+        partnerName = val;
+        saveAll();
+        renderSummary();
+        renderRecords();
+        const btn = document.getElementById('btnSavePartnerName');
+        const orig = btn.textContent;
+        btn.textContent = '✓ Saved';
+        btn.style.background = 'var(--success)';
+        btn.disabled = true;
+        setTimeout(() => { btn.textContent = orig; btn.style.background = ''; btn.disabled = false; }, 2000);
     }
 
     function saveFixedPaymentLabel() {
@@ -1415,13 +1589,23 @@
                         <input class="p-edit-name" type="text" value="${esc(e.name)}" placeholder="#${i + 1}"
                                onblur="updateExpense(${acct.id},${e.id},'name',this.value)"
                                onkeydown="if(event.key==='Enter')this.blur()" />
-                        <input class="p-edit-amount" type="number" value="${e.amount}" min="0" step="0.01"
-                               onblur="updateExpense(${acct.id},${e.id},'amount',this.value)"
-                               onkeydown="if(event.key==='Enter')this.blur()" />
+                        <div class="expense-amount-group">
+                            <span class="expense-currency-sym">${currency}</span>
+                            <input class="p-edit-amount" type="number" value="${e.amount}" min="0" step="0.01"
+                                   onblur="updateExpense(${acct.id},${e.id},'amount',this.value)"
+                                   onkeydown="if(event.key==='Enter')this.blur()" />
+                        </div>
                         <button class="btn-del" onclick="deleteExpense(${acct.id},${e.id})" title="Remove">&#215;</button>
                     </div>`;
                 }).join('')
                 : '<div class="empty">No expenses yet.</div>';
+
+            const subtotalRow = acct.expenses.length > 0
+                ? `<div class="expense-subtotal-row">
+                       <span>Subtotal</span>
+                       <span class="subtotal-value">${fmt(subtotal)}</span>
+                   </div>`
+                : '';
 
             return `
             <div class="account-section" style="--acc-color:${color}">
@@ -1435,15 +1619,18 @@
                 </div>
                 <div class="account-body">
                     <div class="account-add-row">
-                        <input type="number" id="eAmount-${acct.id}" placeholder="0.00" min="0" step="0.01"
-                               style="flex:1"
+                        <input type="text" id="eName-${acct.id}" placeholder="Label (optional)"
+                               style="flex:1;min-width:0"
                                onkeydown="if(event.key==='Enter')addExpenseToAccount(${acct.id})" />
-                        <input type="text"   id="eName-${acct.id}"   placeholder="Label (optional)"
-                               style="width:150px"
-                               onkeydown="if(event.key==='Enter')addExpenseToAccount(${acct.id})" />
+                        <div class="add-amount-wrap">
+                            <span>${currency}</span>
+                            <input type="number" id="eAmount-${acct.id}" placeholder="0.00" min="0" step="0.01"
+                                   onkeydown="if(event.key==='Enter')addExpenseToAccount(${acct.id})" />
+                        </div>
                         <button class="btn-add" onclick="addExpenseToAccount(${acct.id})">Add</button>
                     </div>
                     <div class="account-expense-list">${items}</div>
+                    ${subtotalRow}
                 </div>
             </div>`;
         }).join('');
@@ -1494,7 +1681,7 @@
             </div>
             <hr class="divider">
             <div class="s-gf">
-                <span class="s-label">Girlfriend owes you</span>
+                <span class="s-label">${esc(partnerName)} owes you</span>
                 <span class="s-value">${fmt(owes)}</span>
             </div>`;
     }
@@ -1515,24 +1702,32 @@
             return;
         }
 
-        let totShared = 0, totYour = 0, totGf = 0, totItems = 0;
+        const hasSalary    = salary > 0;
+        const recurringTot = recurringCosts.reduce((s, e) => s + e.amount, 0);
+        let totShared = 0, totGf = 0, totItems = 0, totMyTotal = 0;
 
         const rows = entries.map(k => {
-            const d      = allData[k];
-            const mort   = (d.mortgage != null) ? d.mortgage : mortgage;
-            const exps   = d.accounts ? d.accounts.flatMap(a => a.expenses) : (d.expenses || []);
-            const shared = exps.reduce((s, e) => s + e.amount, 0);
-            const half   = shared / 2;
-            const gfOwes = half + mort;
-            const your   = half;
+            const d        = allData[k];
+            const mort     = (d.mortgage != null) ? d.mortgage : mortgage;
+            const exps     = d.accounts ? d.accounts.flatMap(a => a.expenses) : (d.expenses || []);
+            const shared   = exps.reduce((s, e) => s + e.amount, 0);
+            const half     = shared / 2;
+            const gfOwes   = half + mort;
+            const personal = (d.personal || []).reduce((s, e) => s + e.amount, 0);
+            const myTotal  = half + recurringTot + personal;
 
-            totShared += shared;
-            totYour   += your;
-            totGf     += gfOwes;
-            totItems  += exps.length;
+            totShared   += shared;
+            totGf       += gfOwes;
+            totMyTotal  += myTotal;
+            totItems    += exps.length;
 
             const periodStr = (d.periodFrom && d.periodTo)
                 ? `<div class="period-sub">${fmtDate(d.periodFrom)} → ${fmtDate(d.periodTo)}</div>` : '';
+
+            const leftOver     = salary - myTotal;
+            const leftOverCell = hasSalary
+                ? `<td style="color:var(--${leftOver >= 0 ? 'success' : 'danger'})">${leftOver >= 0 ? fmt(leftOver) : '−' + fmt(leftOver)}</td>`
+                : '';
 
             return `
             <tr onclick="jumpToMonth('${k}')" title="Open ${keyToLabel(k)} in Calculator">
@@ -1541,17 +1736,22 @@
                 <td>${fmt(shared)}</td>
                 <td>${fmt(half)}</td>
                 <td>${fmt(mort)}</td>
-                <td class="your-total">${fmt(your)}</td>
                 <td class="gf-cell">${fmt(gfOwes)}</td>
+                <td>${fmt(myTotal)}</td>
+                ${leftOverCell}
             </tr>`;
         }).join('');
+
+        const leftOverHeader = hasSalary ? '<th>Left Over</th>' : '';
+        const leftOverFooter = hasSalary ? '<td>—</td>' : '';
 
         wrap.innerHTML = `
             <table class="records-table">
                 <thead>
                     <tr>
                         <th>Month</th><th>Items</th><th>Shared Total</th>
-                        <th>Each Half</th><th>Fixed Payment</th><th>Your Total</th><th>GF Owes</th>
+                        <th>Each Half</th><th>Fixed Payment</th><th>${esc(partnerName)} Owes</th>
+                        <th>My Total</th>${leftOverHeader}
                     </tr>
                 </thead>
                 <tbody>${rows}</tbody>
@@ -1562,8 +1762,9 @@
                         <td>${fmt(totShared)}</td>
                         <td>${fmt(totShared / 2)}</td>
                         <td>—</td>
-                        <td>${fmt(totYour)}</td>
                         <td style="color:var(--success)">${fmt(totGf)}</td>
+                        <td>${fmt(totMyTotal)}</td>
+                        ${leftOverFooter}
                     </tr>
                 </tfoot>
             </table>`;
@@ -1611,7 +1812,7 @@
             text += `${pad('Each half (÷2):', 26)}${fmt(half)}\n`;
             text += `${pad('Fixed Payment:', 26)}${fmt(mort)}\n`;
             text += `${sep}\n`;
-            text += `${pad('Girlfriend owes:', 26)}${fmt(owes)}\n`;
+            text += `${pad(partnerName + ' owes:', 26)}${fmt(owes)}\n`;
         }
 
         const btn = document.querySelector('.btn-copy');

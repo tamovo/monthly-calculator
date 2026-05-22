@@ -26,9 +26,13 @@ async function handleGet(env) {
     if (Array.isArray(pt)) {
       accountTemplates  = pt;
       fixedPaymentLabel = 'Fixed Payment';
+      salary            = 0;
+      partnerName       = 'Partner';
     } else {
-      accountTemplates  = pt.templates ?? [];
-      fixedPaymentLabel = pt._label    ?? 'Fixed Payment';
+      accountTemplates  = pt.templates    ?? [];
+      fixedPaymentLabel = pt._label       ?? 'Fixed Payment';
+      salary            = pt.salary       ?? 0;
+      partnerName       = pt.partnerName  ?? 'Partner';
     }
   } catch(_) {
     accountTemplates  = [];
@@ -41,6 +45,8 @@ async function handleGet(env) {
     recurringCosts: JSON.parse(row?.recurring_costs ?? '[]'),
     accountTemplates,
     fixedPaymentLabel,
+    partnerName,
+    salary,
     data: monthData,
   });
 }
@@ -66,7 +72,7 @@ async function handlePost(request, env) {
     body.currency                        ?? '£',
     body.mortgage                        ?? 0,
     JSON.stringify(body.recurringCosts ?? []),
-    JSON.stringify({ _label: body.fixedPaymentLabel ?? 'Fixed Payment', templates: body.accountTemplates ?? [] }),
+    JSON.stringify({ _label: body.fixedPaymentLabel ?? 'Fixed Payment', salary: body.salary ?? 0, partnerName: body.partnerName ?? 'Partner', templates: body.accountTemplates ?? [] }),
   ).run();
 
   const now = new Date().toISOString();
