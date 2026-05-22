@@ -668,14 +668,17 @@
                 </div>
 
                 <div class="card">
-                    <div class="card-title">Mortgage</div>
+                    <div class="card-title">Fixed Payment</div>
                     <div class="mortgage-row">
-                        <span class="mortgage-label">Yan's Monthly mortgage payment</span>
-                        <input type="number" id="mortgage" class="input-amount" placeholder="0.00"
-                               min="0" step="0.01" oninput="saveMortgage()" style="width:120px" />
+                        <span class="mortgage-label" id="mortgageRowLabel">Fixed Payment</span>
+                        <div style="display:flex;align-items:center;gap:4px">
+                            <span id="mortgageCurrencyPrefix" style="font-size:14px;color:var(--text-muted);flex-shrink:0">£</span>
+                            <input type="number" id="mortgage" class="input-amount" placeholder="0.00"
+                                   min="0" step="0.01" oninput="saveMortgage()" style="width:100px" />
+                        </div>
                     </div>
                     <p class="mortgage-note">
-                        total = shared ÷ 2 + mortgage
+                        total = shared ÷ 2 + Fixed Payment
                     </p>
                 </div>
 
@@ -737,7 +740,6 @@
         <div class="records-toolbar">
             <button class="btn-ghost" onclick="exportJSON()">Save backup (.json)</button>
             <button class="btn-ghost" onclick="document.getElementById('importFile').click()">Load backup</button>
-            <button class="btn-ghost" onclick="exportCSV()">Export CSV</button>
         </div>
         <input type="file" id="importFile" accept=".json" style="display:none" onchange="importJSON(this)" />
         <div class="records-wrap" id="recordsWrap">
@@ -748,6 +750,17 @@
     <!-- ── Settings ── -->
     <div class="tab-panel" id="panel-settings">
         <div style="max-width:560px">
+            <div class="card">
+                <div class="card-title">Fixed Payment Label</div>
+                <p class="mortgage-note" style="margin-bottom:12px">
+                    The name shown for your fixed monthly payment in the Calculator, Summary, and Records.
+                </p>
+                <input type="text" id="fixedPaymentLabelInput" class="p-edit-name"
+                       placeholder="e.g. Fixed Payment, Mortgage, Rent contribution"
+                       style="width:100%;box-sizing:border-box" />
+                <button class="btn-add" id="btnSaveFixedLabel" onclick="saveFixedPaymentLabel()"
+                        style="margin-top:10px;width:100%">Save label</button>
+            </div>
             <div class="card">
                 <div class="card-title">Default Calculator Accounts</div>
                 <p class="mortgage-note" style="margin-bottom:16px">
@@ -773,6 +786,7 @@
     let accountTemplates = [{ id: 1, name: 'Chase' }, { id: 2, name: 'Amex' }];
     let mortgage = 0;
     let currency = '£';
+    let fixedPaymentLabel = 'Fixed Payment';
     let useServer = false;
 
     /* ── helpers ── */
@@ -858,7 +872,7 @@
     function setStorageBadge(mode) {
         document.getElementById('storageBadge').className = 'storage-badge ' + mode;
         document.getElementById('storageLabel').textContent =
-            mode === 'file' ? 'Saving to file' : 'Browser storage only';
+            mode === 'file' ? 'Saving to server' : 'Server offline · Browser only';
     }
 
     /* ── persistence ── */
@@ -877,11 +891,12 @@
                     let localData = {};
                     try { localData = JSON.parse(localStorage.getItem('mc_data') || '{}'); } catch(_) {}
                     if (Object.keys(localData).length > 0) {
-                        try { serverPayload.data            = localData; } catch(_) {}
-                        try { serverPayload.recurringCosts  = JSON.parse(localStorage.getItem('mc_recurring') || '[]'); } catch(_) {}
-                        try { serverPayload.accountTemplates= JSON.parse(localStorage.getItem('mc_templates') || '[]'); } catch(_) {}
-                        serverPayload.mortgage = parseFloat(localStorage.getItem('mc_mortgage')) || 0;
-                        serverPayload.currency = localStorage.getItem('mc_currency') || serverPayload.currency || '£';
+                        try { serverPayload.data             = localData; } catch(_) {}
+                        try { serverPayload.recurringCosts   = JSON.parse(localStorage.getItem('mc_recurring') || '[]'); } catch(_) {}
+                        try { serverPayload.accountTemplates = JSON.parse(localStorage.getItem('mc_templates') || '[]'); } catch(_) {}
+                        serverPayload.mortgage          = parseFloat(localStorage.getItem('mc_mortgage')) || 0;
+                        serverPayload.currency          = localStorage.getItem('mc_currency') || serverPayload.currency || '£';
+                        serverPayload.fixedPaymentLabel = localStorage.getItem('mc_fixed_label') || 'Fixed Payment';
                         applyPayload(serverPayload);
                         useServer = true;
                         setStorageBadge('file');
@@ -907,15 +922,17 @@
 
     function applyPayload(payload) {
         if (payload && typeof payload === 'object') {
-            allData          = payload.data             || {};
-            mortgage         = payload.mortgage         || 0;
-            currency         = payload.currency         || '£';
-            recurringCosts   = payload.recurringCosts   || [];
-            accountTemplates = (payload.accountTemplates && payload.accountTemplates.length)
-                               ? payload.accountTemplates : DEFAULT_TEMPLATES;
+            allData           = payload.data             || {};
+            mortgage          = payload.mortgage         || 0;
+            currency          = payload.currency         || '£';
+            recurringCosts    = payload.recurringCosts   || [];
+            accountTemplates  = (payload.accountTemplates && payload.accountTemplates.length)
+                                ? payload.accountTemplates : DEFAULT_TEMPLATES;
+            fixedPaymentLabel = payload.fixedPaymentLabel || fixedPaymentLabel;
         }
         document.getElementById('currencySelect').value = currency;
         loadMonthSettings();
+        applyFixedPaymentLabelUI();
     }
 
     function loadFromLocalStorage() {
@@ -925,24 +942,27 @@
             const saved = JSON.parse(localStorage.getItem('mc_templates') || '[]');
             accountTemplates = saved.length ? saved : DEFAULT_TEMPLATES;
         } catch(_) { accountTemplates = DEFAULT_TEMPLATES; }
-        mortgage = parseFloat(localStorage.getItem('mc_mortgage')) || 0;
-        currency = localStorage.getItem('mc_currency') || '£';
+        mortgage          = parseFloat(localStorage.getItem('mc_mortgage')) || 0;
+        currency          = localStorage.getItem('mc_currency') || '£';
+        fixedPaymentLabel = localStorage.getItem('mc_fixed_label') || 'Fixed Payment';
         document.getElementById('currencySelect').value = currency;
         loadMonthSettings();
+        applyFixedPaymentLabelUI();
     }
 
-    function buildPayload() { return { currency, mortgage, recurringCosts, accountTemplates, data: allData }; }
+    function buildPayload() { return { currency, mortgage, fixedPaymentLabel, recurringCosts, accountTemplates, data: allData }; }
 
     function saveAll() {
         if (useServer) {
             fetch(API, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(buildPayload()) })
                 .catch(() => {});
         }
-        localStorage.setItem('mc_data',      JSON.stringify(allData));
-        localStorage.setItem('mc_recurring', JSON.stringify(recurringCosts));
-        localStorage.setItem('mc_templates', JSON.stringify(accountTemplates));
-        localStorage.setItem('mc_mortgage',  mortgage);
-        localStorage.setItem('mc_currency',  currency);
+        localStorage.setItem('mc_data',        JSON.stringify(allData));
+        localStorage.setItem('mc_recurring',  JSON.stringify(recurringCosts));
+        localStorage.setItem('mc_templates',  JSON.stringify(accountTemplates));
+        localStorage.setItem('mc_mortgage',   mortgage);
+        localStorage.setItem('mc_currency',   currency);
+        localStorage.setItem('mc_fixed_label', fixedPaymentLabel);
     }
 
     /* ── tab nav ── */
@@ -1301,6 +1321,30 @@
         if (t) { t.name = name.trim() || t.name; }
     }
 
+    /* ── fixed payment label ── */
+    function applyFixedPaymentLabelUI() {
+        const rowLbl = document.getElementById('mortgageRowLabel');
+        const input  = document.getElementById('fixedPaymentLabelInput');
+        if (rowLbl) rowLbl.textContent = fixedPaymentLabel;
+        if (input)  input.value        = fixedPaymentLabel;
+    }
+
+    function saveFixedPaymentLabel() {
+        const val = (document.getElementById('fixedPaymentLabelInput').value || '').trim();
+        if (!val) return;
+        fixedPaymentLabel = val;
+        applyFixedPaymentLabelUI();
+        saveAll();
+        renderSummary();
+        renderRecords();
+        const btn = document.getElementById('btnSaveFixedLabel');
+        const orig = btn.textContent;
+        btn.textContent = '✓ Saved';
+        btn.style.background = 'var(--success)';
+        btn.disabled = true;
+        setTimeout(() => { btn.textContent = orig; btn.style.background = ''; btn.disabled = false; }, 2000);
+    }
+
     function saveAccountTemplates() {
         // Flush any pending name edits from focused inputs
         document.querySelectorAll('#settingsAccountList .acct-tmpl-name').forEach(el => {
@@ -1408,6 +1452,10 @@
     }
 
     function renderSummary() {
+        // Keep currency prefix on Fixed Payment input in sync
+        const pfx = document.getElementById('mortgageCurrencyPrefix');
+        if (pfx) pfx.textContent = currency;
+
         const expenses = getAllExpenses();
         const mort     = monthMortgage();
         const total    = expenses.reduce((s, e) => s + e.amount, 0);
@@ -1441,7 +1489,7 @@
                 <span class="s-value">${fmt(half)}</span>
             </div>
             <div class="s-row">
-                <span class="s-label">+ Mortgage</span>
+                <span class="s-label">+ Fixed Payment</span>
                 <span class="s-value">${fmt(mort)}</span>
             </div>
             <hr class="divider">
@@ -1503,7 +1551,7 @@
                 <thead>
                     <tr>
                         <th>Month</th><th>Items</th><th>Shared Total</th>
-                        <th>Each Half</th><th>Mortgage</th><th>Your Total</th><th>GF Owes</th>
+                        <th>Each Half</th><th>Fixed Payment</th><th>Your Total</th><th>GF Owes</th>
                     </tr>
                 </thead>
                 <tbody>${rows}</tbody>
@@ -1561,7 +1609,7 @@
             const owes = half + mort;
             text += `${pad('Total shared:', 26)}${fmt(grandTotal)}\n`;
             text += `${pad('Each half (÷2):', 26)}${fmt(half)}\n`;
-            text += `${pad('Mortgage:', 26)}${fmt(mort)}\n`;
+            text += `${pad('Fixed Payment:', 26)}${fmt(mort)}\n`;
             text += `${sep}\n`;
             text += `${pad('Girlfriend owes:', 26)}${fmt(owes)}\n`;
         }
@@ -1646,38 +1694,6 @@
             input.value = '';
         };
         reader.readAsText(file);
-    }
-
-    function exportCSV() {
-        const entries = Object.keys(allData)
-            .filter(k => {
-                const d = allData[k];
-                const e = d.accounts ? d.accounts.flatMap(a => a.expenses) : (d.expenses || []);
-                return e.length > 0;
-            })
-            .sort((a, b) => b.localeCompare(a));
-
-        if (!entries.length) { alert('No data to export.'); return; }
-
-        const q   = s => `"${String(s).replace(/"/g,'""')}"`;
-        let   csv = 'Month,Period From,Period To,Items,Shared Total,Each Half,Mortgage,Your Total,GF Owes\n';
-
-        entries.forEach(k => {
-            const d    = allData[k];
-            const mort = (d.mortgage != null) ? d.mortgage : mortgage;
-            const exps = d.accounts ? d.accounts.flatMap(a => a.expenses) : (d.expenses || []);
-            const s    = exps.reduce((t, e) => t + e.amount, 0);
-            const half = s / 2;
-            csv += [q(keyToLabel(k)), q(d.periodFrom||''), q(d.periodTo||''),
-                    exps.length, s.toFixed(2), half.toFixed(2),
-                    mort.toFixed(2), half.toFixed(2), (half+mort).toFixed(2)].join(',') + '\n';
-        });
-
-        const a = Object.assign(document.createElement('a'), {
-            href: URL.createObjectURL(new Blob([csv], { type:'text/csv' })),
-            download: `monthly-calculator-${new Date().toISOString().slice(0,10)}.csv`
-        });
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
     }
 
     /* ── shake ── */

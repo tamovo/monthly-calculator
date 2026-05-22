@@ -18,12 +18,30 @@ async function handleGet(env) {
     monthData[m.month_key] = JSON.parse(m.data);
   }
 
+  // account_templates column may be a plain array (old format) or
+  // { _label, templates } wrapper (new format) — handle both
+  let accountTemplates, fixedPaymentLabel;
+  try {
+    const pt = JSON.parse(row?.account_templates ?? '[]');
+    if (Array.isArray(pt)) {
+      accountTemplates  = pt;
+      fixedPaymentLabel = 'Fixed Payment';
+    } else {
+      accountTemplates  = pt.templates ?? [];
+      fixedPaymentLabel = pt._label    ?? 'Fixed Payment';
+    }
+  } catch(_) {
+    accountTemplates  = [];
+    fixedPaymentLabel = 'Fixed Payment';
+  }
+
   return Response.json({
-    currency:         row?.currency                           ?? '£',
-    mortgage:         row?.mortgage                           ?? 0,
-    recurringCosts:   JSON.parse(row?.recurring_costs         ?? '[]'),
-    accountTemplates: JSON.parse(row?.account_templates       ?? '[]'),
-    data:             monthData,
+    currency: row?.currency ?? '£',
+    mortgage: row?.mortgage ?? 0,
+    recurringCosts: JSON.parse(row?.recurring_costs ?? '[]'),
+    accountTemplates,
+    fixedPaymentLabel,
+    data: monthData,
   });
 }
 
@@ -47,8 +65,8 @@ async function handlePost(request, env) {
   `).bind(
     body.currency                        ?? '£',
     body.mortgage                        ?? 0,
-    JSON.stringify(body.recurringCosts   ?? []),
-    JSON.stringify(body.accountTemplates ?? []),
+    JSON.stringify(body.recurringCosts ?? []),
+    JSON.stringify({ _label: body.fixedPaymentLabel ?? 'Fixed Payment', templates: body.accountTemplates ?? [] }),
   ).run();
 
   const now = new Date().toISOString();
