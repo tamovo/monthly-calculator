@@ -20,7 +20,7 @@ async function handleGet(env) {
 
   // account_templates column may be a plain array (old format) or
   // { _label, templates } wrapper (new format) — handle both
-  let accountTemplates, fixedPaymentLabel;
+  let accountTemplates, fixedPaymentLabel, salary, partnerName;
   try {
     const pt = JSON.parse(row?.account_templates ?? '[]');
     if (Array.isArray(pt)) {
