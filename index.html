@@ -1594,16 +1594,54 @@
         const reader = new FileReader();
         reader.onload = e => {
             try {
-                const payload = JSON.parse(e.target.result);
-                if (!payload.data || typeof payload.data !== 'object') throw new Error();
-                if (!confirm(`Load backup from ${payload.exported ? payload.exported.slice(0,10) : 'unknown date'}?\n\nThis will replace your current data.`)) return;
-                applyPayload(payload);
+                const parsed = JSON.parse(e.target.result);
+
+                // ── Single-month file from local data/ directory ──
+                // Format: { accounts:[...], mortgage:N, periodFrom:"...", periodTo:"..." }
+                if (!parsed.data && (parsed.accounts || parsed.expenses)) {
+                    // Derive the month key from periodFrom, or fall back to filename prefix
+                    let monthKey = null;
+                    if (parsed.periodFrom) {
+                        monthKey = parsed.periodFrom.slice(0, 7); // "2026-04"
+                    } else {
+                        const m = file.name.match(/^(\d{4}-\d{2})/);
+                        if (m) monthKey = m[1];
+                    }
+                    if (!monthKey) throw new Error('Cannot determine month from file');
+                    if (!confirm(`Import ${monthKey} into the calculator?\n\nOnly that month will be added or updated — all other months are unchanged.`)) return;
+                    allData[monthKey] = parsed;
+                    saveAll();
+                    refresh();
+                    renderRecords();
+                    alert(`${monthKey} imported successfully.`);
+                    return;
+                }
+
+                // ── Settings-only file from local data/_settings.json ──
+                // Format: { currency:"£", mortgage:N, recurringCosts:[...], accountTemplates:[...] }
+                if (!parsed.data && (parsed.recurringCosts !== undefined || parsed.accountTemplates !== undefined)) {
+                    if (!confirm('Import settings (currency, mortgage, recurring costs, account templates)?\n\nMonth data is unchanged.')) return;
+                    if (parsed.currency)         currency         = parsed.currency;
+                    if (parsed.mortgage != null) mortgage         = parsed.mortgage;
+                    if (Array.isArray(parsed.recurringCosts))   recurringCosts   = parsed.recurringCosts;
+                    if (Array.isArray(parsed.accountTemplates)) accountTemplates = parsed.accountTemplates;
+                    document.getElementById('currencySelect').value = currency;
+                    saveAll();
+                    refresh();
+                    alert('Settings imported successfully.');
+                    return;
+                }
+
+                // ── Full backup (standard export from this app) ──
+                if (!parsed.data || typeof parsed.data !== 'object') throw new Error();
+                if (!confirm(`Load full backup?\n\nThis will replace ALL current data.`)) return;
+                applyPayload(parsed);
                 saveAll();
                 refresh();
                 renderRecords();
                 alert('Backup loaded successfully.');
             } catch(_) {
-                alert('Could not read the file. Make sure it is a valid backup.');
+                alert('Could not read the file.\n\nAccepted formats:\n• Full backup (.json exported from this app)\n• Single-month file from the local data/ folder\n• _settings.json from the local data/ folder');
             }
             input.value = '';
         };
