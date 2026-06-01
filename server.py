@@ -93,6 +93,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path in ('/', '/index.html'):
             self._serve_file(HTML, 'text/html; charset=utf-8')
+        elif self.path == '/api/config':
+            client_id = os.environ.get('GOOGLE_CLIENT_ID', '')
+            self._respond(200, 'application/json',
+                          json.dumps({'clientId': client_id}).encode('utf-8'))
         elif self.path == '/api/data':
             payload = _load_payload()
             self._respond(200, 'application/json',
