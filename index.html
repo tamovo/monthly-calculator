@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Monthly Cost Calculator</title>
+    <script async src="https://accounts.google.com/gsi/client"></script>
     <style>
         :root {
             --bg: #0d0f18;
@@ -672,9 +673,66 @@
             font-weight: 400;
             margin-top: 2px;
         }
+        /* ── Auth / Login ── */
+        #loginScreen {
+            position: fixed;
+            inset: 0;
+            background: var(--bg);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            gap: 16px;
+        }
+
+        #loginScreen h2 { font-size: 24px; font-weight: 600; letter-spacing: -0.3px; }
+
+        .login-subtitle { color: var(--text-muted); font-size: 14px; margin-top: -8px; }
+
+        #loginError { color: var(--danger); font-size: 13px; display: none; }
+
+        .user-profile { display: flex; align-items: center; gap: 8px; }
+
+        .user-avatar {
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 1px solid var(--border);
+        }
+
+        .user-name {
+            font-size: 13px;
+            color: var(--text-muted);
+            max-width: 130px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .btn-signout {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 12px;
+            cursor: pointer;
+            font-family: inherit;
+            transition: color 0.15s, border-color 0.15s;
+        }
+
+        .btn-signout:hover { color: var(--text); border-color: var(--text-muted); }
     </style>
 </head>
 <body>
+<div id="loginScreen">
+    <h2>Monthly Cost Calculator</h2>
+    <p class="login-subtitle">Sign in to access your data</p>
+    <div id="googleSignInBtn"></div>
+    <p id="loginError">Sign in failed. Please try again.</p>
+</div>
+
 <div class="container">
 
     <header>
@@ -693,6 +751,11 @@
                 <option value="A$">A$ AUD</option>
                 <option value="kr">kr SEK/NOK</option>
             </select>
+            <div class="user-profile" id="userProfile" style="display:none">
+                <img class="user-avatar" id="userAvatar" src="" alt="">
+                <span class="user-name" id="userName"></span>
+                <button class="btn-signout" onclick="logout()">Sign out</button>
+            </div>
             <div class="month-nav" id="monthNav">
                 <button class="nav-arrow" onclick="changeMonth(-1)" title="Previous month">&#8249;</button>
                 <select id="monthSelect" class="currency-select" onchange="onMonthYearChange()">
@@ -875,9 +938,17 @@
 
 </div>
 <script>
-    const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-    const API    = '/api/data';
-    const COLORS = ['#7c6cf8','#3dd68c','#f59e0b','#38bdf8','#f472b6','#a78bfa'];
+    const MONTHS     = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const API        = '/api/data';
+    const CONFIG_API = '/api/config';
+    const COLORS     = ['#7c6cf8','#3dd68c','#f59e0b','#38bdf8','#f472b6','#a78bfa'];
+
+    let authToken = null;
+    const gsiReady = new Promise(resolve => { window.onGoogleLibraryLoad = resolve; });
+
+    function authHeaders() {
+        return authToken ? { 'Authorization': `Bearer ${authToken}` } : {};
+    }
 
     let curYear, curMonth;
     let allData          = {};
@@ -980,7 +1051,8 @@
     async function initStorage() {
         try {
             // 3 s timeout — handles cold starts after a fresh deployment
-            const res = await fetch(API, { signal: AbortSignal.timeout(3000) });
+            const res = await fetch(API, { headers: authHeaders(), signal: AbortSignal.timeout(3000) });
+            if (res.status === 401) return false;
             if (res.ok) {
                 const serverPayload = await res.json();
 
@@ -1005,9 +1077,9 @@
                     applyPayload(serverPayload);
                     useServer = true;
                     setStorageBadge('file');
-                    fetch(API, { method:'POST', headers:{'Content-Type':'application/json'},
+                    fetch(API, { method:'POST', headers:{'Content-Type':'application/json', ...authHeaders()},
                                  body: JSON.stringify(buildPayload()) }).catch(() => {});
-                    return;
+                    return true;
                 }
 
                 // Case 2: D1 has data, but localStorage has months D1 doesn't —
@@ -1020,20 +1092,21 @@
                     applyPayload(serverPayload);
                     useServer = true;
                     setStorageBadge('file');
-                    fetch(API, { method:'POST', headers:{'Content-Type':'application/json'},
+                    fetch(API, { method:'POST', headers:{'Content-Type':'application/json', ...authHeaders()},
                                  body: JSON.stringify(buildPayload()) }).catch(() => {});
-                    return;
+                    return true;
                 }
 
                 applyPayload(serverPayload);
                 useServer = true;
                 setStorageBadge('file');
-                return;
+                return true;
             }
         } catch (_) {}
         loadFromLocalStorage();
         useServer = false;
         setStorageBadge('browser');
+        return true;
     }
 
     const DEFAULT_TEMPLATES = [{ id: 1, name: 'Chase' }, { id: 2, name: 'Amex' }];
@@ -1075,9 +1148,12 @@
     function buildPayload() { return { currency, mortgage, salary, fixedPaymentLabel, partnerName, recurringCosts, accountTemplates, data: allData }; }
 
     function saveAll() {
-        if (useServer) {
-            fetch(API, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(buildPayload()) })
-                .catch(() => {});
+        if (useServer && authToken) {
+            fetch(API, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+                body: JSON.stringify(buildPayload()),
+            }).then(res => { if (res.status === 401) handleAuthExpiry(); }).catch(() => {});
         }
         localStorage.setItem('mc_data',        JSON.stringify(allData));
         localStorage.setItem('mc_recurring',  JSON.stringify(recurringCosts));
@@ -1919,14 +1995,97 @@
         setTimeout(() => { el.style.transition = ''; el.style.borderColor = ''; }, 600);
     }
 
+    /* ── auth ── */
+    async function initAuth() {
+        let clientId = '';
+        try {
+            const res = await fetch(CONFIG_API);
+            if (res.ok) ({ clientId } = await res.json());
+        } catch(_) {}
+
+        await gsiReady;
+
+        google.accounts.id.initialize({
+            client_id: clientId,
+            callback: handleGoogleSignIn,
+            auto_select: true,
+        });
+
+        const stored = sessionStorage.getItem('mc_auth');
+        if (stored) {
+            authToken = stored;
+            const ok = await initStorage();
+            if (ok !== false) { showApp(); return; }
+            authToken = null;
+            sessionStorage.removeItem('mc_auth');
+        }
+
+        showLoginScreen();
+    }
+
+    async function handleGoogleSignIn(response) {
+        authToken = response.credential;
+        sessionStorage.setItem('mc_auth', authToken);
+        document.getElementById('loginError').style.display = 'none';
+
+        const ok = await initStorage();
+        if (ok === false) {
+            authToken = null;
+            sessionStorage.removeItem('mc_auth');
+            document.getElementById('loginError').style.display = '';
+            return;
+        }
+        showApp();
+    }
+
+    function showApp() {
+        document.getElementById('loginScreen').style.display = 'none';
+        try {
+            const parts   = authToken.split('.');
+            const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+            const avatar  = document.getElementById('userAvatar');
+            if (payload.picture) { avatar.src = payload.picture; avatar.style.display = ''; }
+            else                  { avatar.style.display = 'none'; }
+            document.getElementById('userName').textContent = payload.name || payload.email || '';
+        } catch(_) {}
+        document.getElementById('userProfile').style.display = '';
+        updateMonthYearSelects();
+        refresh();
+    }
+
+    function showLoginScreen() {
+        document.getElementById('loginScreen').style.display = '';
+        google.accounts.id.renderButton(
+            document.getElementById('googleSignInBtn'),
+            { theme: 'filled_black', size: 'large', text: 'continue_with' }
+        );
+        google.accounts.id.prompt();
+    }
+
+    function handleAuthExpiry() {
+        authToken = null;
+        sessionStorage.removeItem('mc_auth');
+        useServer = false;
+        setStorageBadge('browser');
+        document.getElementById('userProfile').style.display = 'none';
+        showLoginScreen();
+    }
+
+    function logout() {
+        authToken = null;
+        sessionStorage.removeItem('mc_auth');
+        useServer = false;
+        google.accounts.id.disableAutoSelect();
+        document.getElementById('userProfile').style.display = 'none';
+        showLoginScreen();
+    }
+
     /* ── init ── */
     document.addEventListener('DOMContentLoaded', async () => {
         const now = new Date();
         curYear   = now.getFullYear();
         curMonth  = now.getMonth();
-        await initStorage();
-        updateMonthYearSelects();
-        refresh();
+        await initAuth();
     });
 </script>
 </body>

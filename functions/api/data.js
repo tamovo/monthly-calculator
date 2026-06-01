@@ -1,25 +1,40 @@
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
-async function handleGet(env) {
+async function verifyToken(token, clientId) {
+  const res = await fetch(
+    `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(token)}`
+  );
+  if (!res.ok) return null;
+  const info = await res.json();
+  if (info.aud !== clientId) return null;
+  if (parseInt(info.exp) < Math.floor(Date.now() / 1000)) return null;
+  return { userId: info.sub, email: info.email };
+}
+
+async function authenticate(request, env) {
+  const auth = request.headers.get('Authorization') ?? '';
+  if (!auth.startsWith('Bearer ')) return null;
+  return verifyToken(auth.slice(7), env.GOOGLE_CLIENT_ID);
+}
+
+async function handleGet(env, userId) {
   const row = await env.DB.prepare(
-    'SELECT currency, mortgage, recurring_costs, account_templates FROM settings WHERE id = 1'
-  ).first();
+    'SELECT currency, mortgage, recurring_costs, account_templates FROM settings WHERE user_id = ?'
+  ).bind(userId).first();
 
   const months = await env.DB.prepare(
-    'SELECT month_key, data FROM months ORDER BY month_key'
-  ).all();
+    'SELECT month_key, data FROM months WHERE user_id = ? ORDER BY month_key'
+  ).bind(userId).all();
 
   const monthData = {};
   for (const m of months.results) {
     monthData[m.month_key] = JSON.parse(m.data);
   }
 
-  // account_templates column may be a plain array (old format) or
-  // { _label, templates } wrapper (new format) — handle both
   let accountTemplates, fixedPaymentLabel, salary, partnerName;
   try {
     const pt = JSON.parse(row?.account_templates ?? '[]');
@@ -51,7 +66,7 @@ async function handleGet(env) {
   });
 }
 
-async function handlePost(request, env) {
+async function handlePost(request, env, userId) {
   let body;
   try { body = await request.json(); }
   catch { return Response.json({ ok: false, error: 'Invalid JSON' }, { status: 400 }); }
@@ -61,18 +76,24 @@ async function handlePost(request, env) {
   }
 
   await env.DB.prepare(`
-    INSERT INTO settings (id, currency, mortgage, recurring_costs, account_templates)
-    VALUES (1, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET
+    INSERT INTO settings (user_id, currency, mortgage, recurring_costs, account_templates)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET
       currency          = excluded.currency,
       mortgage          = excluded.mortgage,
       recurring_costs   = excluded.recurring_costs,
       account_templates = excluded.account_templates
   `).bind(
+    userId,
     body.currency                        ?? '£',
     body.mortgage                        ?? 0,
     JSON.stringify(body.recurringCosts ?? []),
-    JSON.stringify({ _label: body.fixedPaymentLabel ?? 'Fixed Payment', salary: body.salary ?? 0, partnerName: body.partnerName ?? 'Partner', templates: body.accountTemplates ?? [] }),
+    JSON.stringify({
+      _label:      body.fixedPaymentLabel ?? 'Fixed Payment',
+      salary:      body.salary            ?? 0,
+      partnerName: body.partnerName       ?? 'Partner',
+      templates:   body.accountTemplates  ?? [],
+    }),
   ).run();
 
   const now = new Date().toISOString();
@@ -82,14 +103,16 @@ async function handlePost(request, env) {
 
     if (hasExpenses || hasPersonal) {
       await env.DB.prepare(`
-        INSERT INTO months (month_key, data, updated_at)
-        VALUES (?, ?, ?)
-        ON CONFLICT(month_key) DO UPDATE SET
+        INSERT INTO months (user_id, month_key, data, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(user_id, month_key) DO UPDATE SET
           data       = excluded.data,
           updated_at = excluded.updated_at
-      `).bind(monthKey, JSON.stringify(monthData), now).run();
+      `).bind(userId, monthKey, JSON.stringify(monthData), now).run();
     } else {
-      await env.DB.prepare('DELETE FROM months WHERE month_key = ?').bind(monthKey).run();
+      await env.DB.prepare(
+        'DELETE FROM months WHERE user_id = ? AND month_key = ?'
+      ).bind(userId, monthKey).run();
     }
   }
 
@@ -97,17 +120,24 @@ async function handlePost(request, env) {
 }
 
 export async function onRequest({ request, env }) {
-  // Normalise binding name to DB regardless of wrangler.toml variable name
-  const db = env.monthly_calculator_db ?? env.DB;
+  const db      = env.monthly_calculator_db ?? env.DB;
   const normEnv = { ...env, DB: db };
 
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS });
   }
 
+  const user = await authenticate(request, normEnv);
+  if (!user) {
+    return new Response(
+      JSON.stringify({ ok: false, error: 'Unauthorized' }),
+      { status: 401, headers: { 'Content-Type': 'application/json', ...CORS } }
+    );
+  }
+
   let res;
-  if      (request.method === 'GET')  res = await handleGet(normEnv);
-  else if (request.method === 'POST') res = await handlePost(request, normEnv);
+  if      (request.method === 'GET')  res = await handleGet(normEnv, user.userId);
+  else if (request.method === 'POST') res = await handlePost(request, normEnv, user.userId);
   else                                res = new Response('Method Not Allowed', { status: 405 });
 
   const headers = new Headers(res.headers);
