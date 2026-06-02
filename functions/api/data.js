@@ -35,33 +35,42 @@ async function handleGet(env, userId) {
     monthData[m.month_key] = JSON.parse(m.data);
   }
 
-  let accountTemplates, fixedPaymentLabel, salary, partnerName;
+  let accountTemplates, fixedPaymentLabel, salary, partnerName, splitRatio, fixedPaymentTemplates;
   try {
     const pt = JSON.parse(row?.account_templates ?? '[]');
     if (Array.isArray(pt)) {
-      accountTemplates  = pt;
-      fixedPaymentLabel = 'Fixed Payment';
-      salary            = 0;
-      partnerName       = 'Partner';
+      accountTemplates      = pt;
+      fixedPaymentLabel     = 'Fixed Payment';
+      salary                = 0;
+      partnerName           = 'Partner';
+      splitRatio            = 50;
+      fixedPaymentTemplates = [{ id: 1, name: 'Fixed Payment', amount: 0 }];
     } else {
-      accountTemplates  = pt.templates    ?? [];
-      fixedPaymentLabel = pt._label       ?? 'Fixed Payment';
-      salary            = pt.salary       ?? 0;
-      partnerName       = pt.partnerName  ?? 'Partner';
+      accountTemplates      = pt.templates             ?? [];
+      fixedPaymentLabel     = pt._label                ?? 'Fixed Payment';
+      salary                = pt.salary                ?? 0;
+      partnerName           = pt.partnerName           ?? 'Partner';
+      splitRatio            = pt.splitRatio            ?? 50;
+      fixedPaymentTemplates = pt.fixedPaymentTemplates ?? [{ id: 1, name: 'Fixed Payment', amount: 0 }];
     }
   } catch(_) {
-    accountTemplates  = [];
-    fixedPaymentLabel = 'Fixed Payment';
+    accountTemplates      = [];
+    fixedPaymentLabel     = 'Fixed Payment';
+    splitRatio            = 50;
+    fixedPaymentTemplates = [{ id: 1, name: 'Fixed Payment', amount: 0 }];
   }
 
   return Response.json({
     currency: row?.currency ?? '£',
-    mortgage: row?.mortgage ?? 0,
+    mortgage: 0,
     recurringCosts: JSON.parse(row?.recurring_costs ?? '[]'),
     accountTemplates,
     fixedPaymentLabel,
+    fixedPaymentTemplates,
     partnerName,
     salary,
+    splitRatio,
+    serverTime: new Date().toISOString(),
     data: monthData,
   });
 }
@@ -73,6 +82,16 @@ async function handlePost(request, env, userId) {
 
   if (!body.data || typeof body.data !== 'object') {
     return Response.json({ ok: false, error: 'Missing or invalid data key' }, { status: 400 });
+  }
+
+  // Conflict detection: reject if another device wrote after client's last sync
+  if (body.syncedAt) {
+    const latest = await env.DB.prepare(
+      'SELECT MAX(updated_at) as max_at FROM months WHERE user_id = ?'
+    ).bind(userId).first();
+    if (latest?.max_at && latest.max_at > body.syncedAt) {
+      return Response.json({ ok: false, conflict: true }, { status: 409 });
+    }
   }
 
   await env.DB.prepare(`
@@ -89,19 +108,22 @@ async function handlePost(request, env, userId) {
     body.mortgage                        ?? 0,
     JSON.stringify(body.recurringCosts ?? []),
     JSON.stringify({
-      _label:      body.fixedPaymentLabel ?? 'Fixed Payment',
-      salary:      body.salary            ?? 0,
-      partnerName: body.partnerName       ?? 'Partner',
-      templates:   body.accountTemplates  ?? [],
+      _label:                body.fixedPaymentLabel     ?? 'Fixed Payment',
+      salary:                body.salary                ?? 0,
+      partnerName:           body.partnerName           ?? 'Partner',
+      splitRatio:            body.splitRatio            ?? 50,
+      fixedPaymentTemplates: body.fixedPaymentTemplates ?? [],
+      templates:             body.accountTemplates      ?? [],
     }),
   ).run();
 
   const now = new Date().toISOString();
   for (const [monthKey, monthData] of Object.entries(body.data)) {
-    const hasExpenses = (monthData.accounts ?? []).some(a => (a.expenses ?? []).length > 0);
-    const hasPersonal = (monthData.personal ?? []).length > 0;
+    const hasExpenses      = (monthData.accounts     ?? []).some(a => (a.expenses ?? []).length > 0);
+    const hasPersonal      = (monthData.personal     ?? []).length > 0;
+    const hasFixedPayments = (monthData.fixedPayments ?? []).some(p => (p.amount || 0) > 0);
 
-    if (hasExpenses || hasPersonal) {
+    if (hasExpenses || hasPersonal || hasFixedPayments) {
       await env.DB.prepare(`
         INSERT INTO months (user_id, month_key, data, updated_at)
         VALUES (?, ?, ?, ?)

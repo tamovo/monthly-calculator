@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Monthly Cost Calculator</title>
     <script async src="https://accounts.google.com/gsi/client"></script>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icon.svg">
+    <meta name="theme-color" content="#7c6cf8">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <style>
         :root {
             --bg: #0d0f18;
@@ -724,6 +728,24 @@
 
         .btn-signout:hover { color: var(--text); border-color: var(--text-muted); }
 
+        /* ── Save toast ── */
+        #saveToast {
+            position: fixed;
+            bottom: 24px; right: 24px;
+            background: var(--surface2);
+            border: 1px solid var(--success);
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-size: 13px;
+            color: var(--success);
+            z-index: 500;
+            opacity: 0;
+            transform: translateY(8px);
+            transition: opacity 0.2s, transform 0.2s;
+            pointer-events: none;
+        }
+        #saveToast.show { opacity: 1; transform: translateY(0); }
+
         /* ── Charts ── */
         .chart-controls {
             display: flex;
@@ -934,6 +956,8 @@
     </style>
 </head>
 <body>
+<div id="saveToast"></div>
+
 <div id="loginScreen">
     <h2>Monthly Cost Calculator</h2>
     <p class="login-subtitle">Sign in to access your data</p>
@@ -1011,18 +1035,9 @@
                 </div>
 
                 <div class="card">
-                    <div class="card-title">Fixed Payment</div>
-                    <div class="mortgage-row">
-                        <span class="mortgage-label" id="mortgageRowLabel">Fixed Payment</span>
-                        <div style="display:flex;align-items:center;gap:4px">
-                            <span id="mortgageCurrencyPrefix" style="font-size:14px;color:var(--text-muted);flex-shrink:0">£</span>
-                            <input type="number" id="mortgage" class="input-amount" placeholder="0.00"
-                                   min="0" step="0.01" oninput="saveMortgage()" style="width:100px" />
-                        </div>
-                    </div>
-                    <p class="mortgage-note">
-                        total = shared ÷ 2 + Fixed Payment
-                    </p>
+                    <div class="card-title">Fixed Payments</div>
+                    <p class="mortgage-note" style="margin-bottom:14px">Added on top of the split — rent, mortgage, bills, etc.</p>
+                    <div id="fixedPaymentsList"></div>
                 </div>
 
             </div>
@@ -1111,6 +1126,28 @@
     <div class="tab-panel" id="panel-settings">
         <div style="max-width:560px">
             <div class="card">
+                <div class="card-title">Expense Split Ratio</div>
+                <p class="mortgage-note" style="margin-bottom:14px">What % of shared expenses your partner pays. Default 50/50.</p>
+                <div style="display:flex;gap:20px;margin-bottom:16px">
+                    <div style="flex:1;text-align:center">
+                        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-muted);margin-bottom:4px">You pay</div>
+                        <div style="font-size:28px;font-weight:700" id="splitMineDisplay">50%</div>
+                    </div>
+                    <div style="display:flex;align-items:center;color:var(--border);font-size:24px">/</div>
+                    <div style="flex:1;text-align:center">
+                        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-muted);margin-bottom:4px" id="splitPartnerDisplayLabel">Partner</div>
+                        <div style="font-size:28px;font-weight:700" id="splitPartnerDisplay">50%</div>
+                    </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+                    <span style="font-size:13px;color:var(--text-muted);flex-shrink:0">Partner pays</span>
+                    <input type="number" id="splitRatioInput" min="0" max="100" step="1" value="50"
+                           oninput="updateSplitDisplay()" style="width:70px;text-align:center">
+                    <span id="splitRatioValue" style="font-size:13px;color:var(--text-muted)">%</span>
+                </div>
+                <button class="btn-add" id="btnSaveSplitRatio" onclick="saveSplitRatio()" style="width:100%">Save split</button>
+            </div>
+            <div class="card">
                 <div class="card-title">Partner Name</div>
                 <p class="mortgage-note" style="margin-bottom:12px">
                     Shown in the Summary ("Partner owes you") and Records table header.
@@ -1122,15 +1159,11 @@
                         style="margin-top:10px;width:100%">Save name</button>
             </div>
             <div class="card">
-                <div class="card-title">Fixed Payment Label</div>
-                <p class="mortgage-note" style="margin-bottom:12px">
-                    The name shown for your fixed monthly payment in the Calculator, Summary, and Records.
-                </p>
-                <input type="text" id="fixedPaymentLabelInput" class="p-edit-name"
-                       placeholder="e.g. Fixed Payment, Mortgage, Rent contribution"
-                       style="width:100%;box-sizing:border-box" />
-                <button class="btn-add" id="btnSaveFixedLabel" onclick="saveFixedPaymentLabel()"
-                        style="margin-top:10px;width:100%">Save label</button>
+                <div class="card-title">Fixed Payment Templates</div>
+                <p class="mortgage-note" style="margin-bottom:16px">Default fixed payments added to each new month. Name + default amount.</p>
+                <div id="fixedPaymentTemplatesList"></div>
+                <button class="btn-add-account" onclick="addFixedPaymentTemplate()" style="margin-top:10px">+ Add payment</button>
+                <button class="btn-add" id="btnSaveFixedTemplates" onclick="saveFixedPaymentTemplates()" style="margin-top:10px;width:100%">Save templates</button>
             </div>
             <div class="card">
                 <div class="card-title">Default Calculator Accounts</div>
@@ -1155,7 +1188,7 @@
             </div>
             <div class="chart-mode-btns">
                 <button class="chart-mode-btn"        id="chartModeShared"   onclick="setChartMode('shared')">Shared</button>
-                <button class="chart-mode-btn active" id="chartModePersonal" onclick="setChartMode('personal')">Personal</button>
+                <button class="chart-mode-btn active" id="chartModePersonal" onclick="setChartMode('mytotal')">My Total</button>
             </div>
         </div>
         <div class="chart-wrap" id="chartWrap">
@@ -1176,7 +1209,10 @@
     const CONFIG_API = '/api/config';
     const COLORS     = ['#7c6cf8','#3dd68c','#f59e0b','#38bdf8','#f472b6','#a78bfa'];
 
-    let authToken = null;
+    let authToken    = null;
+    let lastSyncedAt = null;
+    let splitRatio   = 50;
+    let saveToastTimer = null;
     const gsiReady = new Promise(resolve => { window.onGoogleLibraryLoad = resolve; });
 
     function authHeaders() {
@@ -1185,9 +1221,10 @@
 
     let curYear, curMonth;
     let allData          = {};
-    let recurringCosts   = [];
-    let accountTemplates = [{ id: 1, name: 'Chase' }, { id: 2, name: 'Amex' }];
-    let mortgage    = 0;
+    let recurringCosts        = [];
+    let accountTemplates      = [{ id: 1, name: 'Chase' }, { id: 2, name: 'Amex' }];
+    let fixedPaymentTemplates = [{ id: 1, name: 'Fixed Payment', amount: 0 }];
+    let mortgage    = 0; // kept for backward-compat migration only
     let salary      = 0;
     let currency    = '£';
     let fixedPaymentLabel = 'Fixed Payment';
@@ -1250,7 +1287,10 @@
     function ensureMonthData() {
         const k = curKey();
         if (!allData[k]) {
-            allData[k] = { accounts: defaultAccounts(), mortgage };
+            allData[k] = {
+                accounts: defaultAccounts(),
+                fixedPayments: fixedPaymentTemplates.map((t, i) => ({ id: Date.now() + i, name: t.name, amount: t.amount })),
+            };
         } else if (allData[k].expenses && !allData[k].accounts) {
             // migrate old flat format
             allData[k].accounts = [{ id: Date.now(), name: 'Chase', expenses: allData[k].expenses }, ...defaultAccounts().slice(1)];
@@ -1258,7 +1298,12 @@
         } else if (!allData[k].accounts) {
             allData[k].accounts = defaultAccounts();
         }
-        return allData[k];
+        const d = allData[k];
+        if (!d.fixedPayments) {
+            const amt = d.mortgage != null ? d.mortgage : 0;
+            d.fixedPayments = [{ id: 1, name: fixedPaymentLabel || 'Fixed Payment', amount: amt }];
+        }
+        return d;
     }
 
     function getAllExpenses() {
@@ -1270,7 +1315,8 @@
 
     function monthMortgage() {
         const d = allData[curKey()];
-        return (d && d.mortgage != null) ? d.mortgage : mortgage;
+        if (d?.fixedPayments) return d.fixedPayments.reduce((s, p) => s + (p.amount || 0), 0);
+        return (d && d.mortgage != null) ? d.mortgage : 0;
     }
 
     /* ── storage status ── */
@@ -1288,6 +1334,7 @@
             if (res.status === 401) return false;
             if (res.ok) {
                 const serverPayload = await res.json();
+                lastSyncedAt = serverPayload.serverTime || new Date().toISOString();
 
                 // Read localStorage once for merge decisions
                 let localData = {};
@@ -1353,8 +1400,11 @@
             recurringCosts    = payload.recurringCosts   || [];
             accountTemplates  = (payload.accountTemplates && payload.accountTemplates.length)
                                 ? payload.accountTemplates : DEFAULT_TEMPLATES;
-            fixedPaymentLabel = payload.fixedPaymentLabel || fixedPaymentLabel;
-            partnerName       = payload.partnerName       || partnerName;
+            fixedPaymentLabel     = payload.fixedPaymentLabel     || fixedPaymentLabel;
+            partnerName           = payload.partnerName           || partnerName;
+            splitRatio            = payload.splitRatio            ?? splitRatio;
+            if (Array.isArray(payload.fixedPaymentTemplates) && payload.fixedPaymentTemplates.length)
+                fixedPaymentTemplates = payload.fixedPaymentTemplates;
         }
         document.getElementById('currencySelect').value = currency;
         loadMonthSettings();
@@ -1371,31 +1421,42 @@
         mortgage          = parseFloat(localStorage.getItem('mc_mortgage'))    || 0;
         salary            = parseFloat(localStorage.getItem('mc_salary'))     || 0;
         currency          = localStorage.getItem('mc_currency')               || '£';
-        fixedPaymentLabel = localStorage.getItem('mc_fixed_label')             || 'Fixed Payment';
-        partnerName       = localStorage.getItem('mc_partner_name')           || 'Partner';
+        fixedPaymentLabel = localStorage.getItem('mc_fixed_label')    || 'Fixed Payment';
+        partnerName       = localStorage.getItem('mc_partner_name') || 'Partner';
+        splitRatio = parseFloat(localStorage.getItem('mc_split_ratio')) || 50;
+        try {
+            const fpt = JSON.parse(localStorage.getItem('mc_fixed_templates') || '[]');
+            if (fpt.length) fixedPaymentTemplates = fpt;
+        } catch(_) {}
         document.getElementById('currencySelect').value = currency;
         loadMonthSettings();
         applyFixedPaymentLabelUI();
     }
 
-    function buildPayload() { return { currency, mortgage, salary, fixedPaymentLabel, partnerName, recurringCosts, accountTemplates, data: allData }; }
+    function buildPayload() { return { currency, mortgage: 0, salary, fixedPaymentLabel, partnerName, splitRatio, fixedPaymentTemplates, recurringCosts, accountTemplates, data: allData }; }
 
     function saveAll() {
         if (useServer && authToken) {
             fetch(API, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
-                body: JSON.stringify(buildPayload()),
-            }).then(res => { if (res.status === 401) handleAuthExpiry(); }).catch(() => {});
+                body: JSON.stringify({ ...buildPayload(), syncedAt: lastSyncedAt }),
+            }).then(res => {
+                if (res.ok)              { lastSyncedAt = new Date().toISOString(); showSaveToast(); }
+                else if (res.status === 409) handleConflict();
+                else if (res.status === 401) handleAuthExpiry();
+            }).catch(() => {});
         }
-        localStorage.setItem('mc_data',        JSON.stringify(allData));
-        localStorage.setItem('mc_recurring',  JSON.stringify(recurringCosts));
-        localStorage.setItem('mc_templates',  JSON.stringify(accountTemplates));
-        localStorage.setItem('mc_mortgage',   mortgage);
-        localStorage.setItem('mc_salary',     salary);
-        localStorage.setItem('mc_currency',   currency);
+        localStorage.setItem('mc_data',         JSON.stringify(allData));
+        localStorage.setItem('mc_recurring',     JSON.stringify(recurringCosts));
+        localStorage.setItem('mc_templates',     JSON.stringify(accountTemplates));
+        localStorage.setItem('mc_mortgage',      mortgage);
+        localStorage.setItem('mc_salary',        salary);
+        localStorage.setItem('mc_currency',      currency);
         localStorage.setItem('mc_fixed_label',   fixedPaymentLabel);
-        localStorage.setItem('mc_partner_name', partnerName);
+        localStorage.setItem('mc_partner_name',  partnerName);
+        localStorage.setItem('mc_split_ratio',       splitRatio);
+        localStorage.setItem('mc_fixed_templates',   JSON.stringify(fixedPaymentTemplates));
     }
 
     /* ── tab nav ── */
@@ -1452,10 +1513,6 @@
     function loadMonthSettings() {
         const k   = curKey();
         const d   = allData[k];
-
-        // mortgage
-        const m = (d && d.mortgage != null) ? d.mortgage : mortgage;
-        document.getElementById('mortgage').value = m || '';
 
         // period: use saved dates, or derive from previous month
         const def = defaultPeriod(curYear, curMonth);
@@ -1567,26 +1624,6 @@
         const subtotal = acct.expenses.reduce((s, e) => s + e.amount, 0);
         const subtotalEl = document.getElementById(`acctSubtotal-${accountId}`);
         if (subtotalEl) subtotalEl.textContent = fmt(subtotal);
-    }
-
-    /* ── mortgage / currency ── */
-    function saveMortgage() {
-        const val = parseFloat(document.getElementById('mortgage').value) || 0;
-        const old = mortgage;
-        mortgage  = val;
-        const d   = ensureMonthData();
-        d.mortgage = val;
-
-        // Propagate to future months that still carry the previous default
-        const cur = curKey();
-        Object.keys(allData).forEach(k => {
-            if (k <= cur) return;
-            const m = allData[k];
-            if (m && (m.mortgage === old || m.mortgage == null)) m.mortgage = val;
-        });
-
-        saveAll();
-        renderSummary();
     }
 
     function setCurrency(val) { currency = val; saveAll(); refresh(); }
@@ -1703,8 +1740,8 @@
 
         const recurring = recurringCosts.reduce((s, e) => s + e.amount, 0);
         const extra     = d.personal.reduce((s, e) => s + e.amount, 0);
-        const myHalf    = getAllExpenses().reduce((s, e) => s + e.amount, 0) / 2;
-        const myTotal   = recurring + extra + myHalf;
+        const myShare   = getAllExpenses().reduce((s, e) => s + e.amount, 0) * (1 - splitRatio / 100);
+        const myTotal   = recurring + extra + myShare;
 
         const salaryRow = salary > 0
             ? `<div class="s-row">
@@ -1738,8 +1775,8 @@
                 <span class="s-value">${fmt(extra)}</span>
             </div>
             <div class="s-row">
-                <span class="s-label">Half of shared expenses</span>
-                <span class="s-value">${fmt(myHalf)}</span>
+                <span class="s-label">My share of shared (${100 - splitRatio}%)</span>
+                <span class="s-value">${fmt(myShare)}</span>
             </div>
             <hr class="divider">
             <div class="s-highlight">
@@ -1805,6 +1842,9 @@
         if (fixedIn)   fixedIn.value      = fixedPaymentLabel;
         if (salIn)     salIn.value        = salary || '';
         if (partnerIn) partnerIn.value    = partnerName;
+        const splitIn = document.getElementById('splitRatioInput');
+        if (splitIn) { splitIn.value = splitRatio; updateSplitDisplay(); }
+        renderFixedPayments();
     }
 
     function saveSalary() {
@@ -1829,13 +1869,7 @@
     }
 
     function saveFixedPaymentLabel() {
-        const val = (document.getElementById('fixedPaymentLabelInput').value || '').trim();
-        if (!val) return;
-        fixedPaymentLabel = val;
-        applyFixedPaymentLabelUI();
-        saveAll();
-        renderSummary();
-        renderRecords();
+        // deprecated — kept only so old import JSON doesn't break
         const btn = document.getElementById('btnSaveFixedLabel');
         const orig = btn.textContent;
         btn.textContent = '✓ Saved';
@@ -1875,6 +1909,7 @@
     }
 
     function renderSettings() {
+        renderFixedPaymentTemplates();
         const list = document.getElementById('settingsAccountList');
         if (!list) return;
         list.innerHTML = accountTemplates.map((t, i) => `
@@ -1892,6 +1927,7 @@
     /* ── render ── */
     function refresh() {
         renderAccounts();
+        renderFixedPayments();
         renderSummary();
         renderRecurring();
         renderPersonal();
@@ -1968,11 +2004,13 @@
         const pfx = document.getElementById('mortgageCurrencyPrefix');
         if (pfx) pfx.textContent = currency;
 
-        const expenses = getAllExpenses();
-        const mort     = monthMortgage();
-        const total    = expenses.reduce((s, e) => s + e.amount, 0);
-        const half     = total / 2;
-        const owes     = half + mort;
+        const expenses      = getAllExpenses();
+        const d2            = allData[curKey()];
+        const fixedPayments = d2?.fixedPayments || [];
+        const mort          = fixedPayments.reduce((s, p) => s + (p.amount || 0), 0);
+        const total         = expenses.reduce((s, e) => s + e.amount, 0);
+        const partnerShare  = splitRatio / 100;
+        const owes          = total * partnerShare + mort;
 
         // per-account rows
         const d = allData[curKey()];
@@ -1997,13 +2035,10 @@
                 <span class="s-value">${fmt(total)}</span>
             </div>
             <div class="s-row">
-                <span class="s-label">&#247; 2 &nbsp;(each half)</span>
-                <span class="s-value">${fmt(half)}</span>
+                <span class="s-label">${esc(partnerName)}'s share (${splitRatio}%)</span>
+                <span class="s-value">${fmt(total * partnerShare)}</span>
             </div>
-            <div class="s-row">
-                <span class="s-label">+ Fixed Payment</span>
-                <span class="s-value">${fmt(mort)}</span>
-            </div>
+            ${fixedPayments.map(p => `<div class="s-row"><span class="s-label">+ ${esc(p.name)}</span><span class="s-value">${fmt(p.amount || 0)}</span></div>`).join('')}
             <hr class="divider">
             <div class="s-gf">
                 <span class="s-label">${esc(partnerName)} owes you</span>
@@ -2033,13 +2068,15 @@
 
         const rows = entries.map(k => {
             const d        = allData[k];
-            const mort     = (d.mortgage != null) ? d.mortgage : mortgage;
+            const mort     = d.fixedPayments
+                ? d.fixedPayments.reduce((s, p) => s + (p.amount || 0), 0)
+                : (d.mortgage != null ? d.mortgage : 0);
             const exps     = d.accounts ? d.accounts.flatMap(a => a.expenses) : (d.expenses || []);
-            const shared   = exps.reduce((s, e) => s + e.amount, 0);
-            const half     = shared / 2;
-            const gfOwes   = half + mort;
-            const personal = (d.personal || []).reduce((s, e) => s + e.amount, 0);
-            const myTotal  = half + recurringTot + personal;
+            const shared     = exps.reduce((s, e) => s + e.amount, 0);
+            const myShare    = shared * (1 - splitRatio / 100);
+            const gfOwes     = shared * (splitRatio / 100) + mort;
+            const personal   = (d.personal || []).reduce((s, e) => s + e.amount, 0);
+            const myTotal    = myShare + recurringTot + personal;
 
             totShared   += shared;
             totGf       += gfOwes;
@@ -2059,7 +2096,7 @@
                 <td class="month-cell">${keyToLabel(k)}${periodStr}</td>
                 <td><span class="pill">${exps.length}</span></td>
                 <td>${fmt(shared)}</td>
-                <td>${fmt(half)}</td>
+                <td>${fmt(shared * splitRatio / 100)}</td>
                 <td>${fmt(mort)}</td>
                 <td class="gf-cell">${fmt(gfOwes)}</td>
                 <td>${fmt(myTotal)}</td>
@@ -2075,7 +2112,7 @@
                 <thead>
                     <tr>
                         <th>Month</th><th>Items</th><th>Shared Total</th>
-                        <th>Each Half</th><th>Fixed Payment</th><th>${esc(partnerName)} Owes</th>
+                        <th>${esc(partnerName)}'s Share</th><th>Fixed</th><th>${esc(partnerName)} Owes</th>
                         <th>My Total</th>${leftOverHeader}
                     </tr>
                 </thead>
@@ -2085,7 +2122,7 @@
                         <td>Totals &nbsp;<span class="pill">${entries.length} months</span></td>
                         <td style="text-align:right"><span class="pill">${totItems}</span></td>
                         <td>${fmt(totShared)}</td>
-                        <td>${fmt(totShared / 2)}</td>
+                        <td>${fmt(totShared * splitRatio / 100)}</td>
                         <td>—</td>
                         <td style="color:var(--success)">${fmt(totGf)}</td>
                         <td>${fmt(totMyTotal)}</td>
@@ -2131,11 +2168,13 @@
                 text += `  ${pad('Subtotal:', 22)}${fmt(sub)}\n\n`;
             });
             text += `${sep}\n`;
-            const half = grandTotal / 2;
-            const owes = half + mort;
+            const fixedPmts = (d?.fixedPayments || []);
+            const fixedTot  = fixedPmts.reduce((s, p) => s + (p.amount || 0), 0);
+            const gfShare   = grandTotal * (splitRatio / 100);
+            const owes      = gfShare + fixedTot;
             text += `${pad('Total shared:', 26)}${fmt(grandTotal)}\n`;
-            text += `${pad('Each half (÷2):', 26)}${fmt(half)}\n`;
-            text += `${pad('Fixed Payment:', 26)}${fmt(mort)}\n`;
+            text += `${pad(partnerName + "'s share (" + splitRatio + "%):", 26)}${fmt(gfShare)}\n`;
+            fixedPmts.forEach(p => { text += `${pad('+ ' + p.name + ':', 26)}${fmt(p.amount || 0)}\n`; });
             text += `${sep}\n`;
             text += `${pad(partnerName + ' owes:', 26)}${fmt(owes)}\n`;
         }
@@ -2231,14 +2270,19 @@
 
     /* ── charts ── */
     let chartYear = new Date().getFullYear();
-    let chartMode = 'personal';
+    let chartMode = 'mytotal';
 
     function getMonthTotal(monthKey, mode) {
         const d = allData[monthKey];
         if (!d) return 0;
         if (mode === 'shared')
             return (d.accounts || []).flatMap(a => a.expenses || []).reduce((s, e) => s + (e.amount || 0), 0);
-        return (d.personal || []).reduce((s, e) => s + (e.amount || 0), 0);
+        // 'mytotal': my share of shared + recurring + one-off personal
+        const shared       = (d.accounts || []).flatMap(a => a.expenses || []).reduce((s, e) => s + (e.amount || 0), 0);
+        const myShare      = shared * (1 - splitRatio / 100);
+        const recurringTot = recurringCosts.reduce((s, e) => s + (e.amount || 0), 0);
+        const personal     = (d.personal || []).reduce((s, e) => s + (e.amount || 0), 0);
+        return myShare + recurringTot + personal;
     }
 
     function niceMax(raw) {
@@ -2352,9 +2396,166 @@
     function setChartMode(mode) {
         chartMode = mode;
         document.getElementById('chartModeShared').classList.toggle('active',   mode === 'shared');
-        document.getElementById('chartModePersonal').classList.toggle('active', mode === 'personal');
+        document.getElementById('chartModePersonal').classList.toggle('active', mode === 'mytotal');
         renderCharts();
     }
+
+    /* ── fixed payments (per-month) ── */
+    function renderFixedPayments() {
+        const list = document.getElementById('fixedPaymentsList');
+        if (!list) return;
+        const d = ensureMonthData();
+        list.innerHTML = d.fixedPayments.map(p => `
+            <div class="expense-item">
+                <input class="p-edit-name" type="text" value="${esc(p.name)}" placeholder="Payment name"
+                       onblur="updateFixedPayment(${p.id},'name',this.value)"
+                       onkeydown="if(event.key==='Enter')this.blur()"/>
+                <div class="expense-amount-group">
+                    <span class="expense-currency-sym">${currency}</span>
+                    <input class="p-edit-amount" type="number" value="${p.amount || ''}" min="0" step="0.01" placeholder="0.00"
+                           oninput="updateFixedPayment(${p.id},'amount',this.value)"/>
+                </div>
+                ${d.fixedPayments.length > 1
+                    ? `<button class="btn-del" onclick="deleteFixedPayment(${p.id})" title="Remove">&#215;</button>`
+                    : '<div style="width:28px"></div>'}
+            </div>`).join('')
+            + `<button class="btn-add-account" onclick="addFixedPayment()" style="margin-top:8px">+ Add payment</button>`;
+    }
+
+    function addFixedPayment() {
+        const d = ensureMonthData();
+        d.fixedPayments.push({ id: Date.now(), name: 'Fixed Payment', amount: 0 });
+        saveAll(); renderFixedPayments(); renderSummary();
+    }
+
+    function deleteFixedPayment(id) {
+        const d = ensureMonthData();
+        if (d.fixedPayments.length <= 1) return;
+        d.fixedPayments = d.fixedPayments.filter(p => p.id !== id);
+        saveAll(); renderFixedPayments(); renderSummary();
+    }
+
+    function updateFixedPayment(id, field, value) {
+        const d = ensureMonthData();
+        const p = d.fixedPayments.find(x => x.id === id);
+        if (!p) return;
+        if (field === 'amount') p.amount = parseFloat(value) || 0;
+        else                    p.name   = value.trim() || p.name;
+        saveAll(); renderSummary();
+    }
+
+    /* ── fixed payment templates (settings) ── */
+    function renderFixedPaymentTemplates() {
+        const list = document.getElementById('fixedPaymentTemplatesList');
+        if (!list) return;
+        list.innerHTML = fixedPaymentTemplates.map(t => `
+            <div class="expense-item" style="margin-bottom:6px">
+                <input class="p-edit-name" type="text" value="${esc(t.name)}" placeholder="Payment name"
+                       onblur="updateFixedPaymentTemplate(${t.id},'name',this.value)"
+                       onkeydown="if(event.key==='Enter')this.blur()"/>
+                <div class="expense-amount-group">
+                    <span class="expense-currency-sym">${currency}</span>
+                    <input class="p-edit-amount" type="number" value="${t.amount || ''}" min="0" step="0.01" placeholder="0.00"
+                           oninput="updateFixedPaymentTemplate(${t.id},'amount',this.value)"/>
+                </div>
+                ${fixedPaymentTemplates.length > 1
+                    ? `<button class="btn-del" onclick="deleteFixedPaymentTemplate(${t.id})" title="Remove">&#215;</button>`
+                    : '<div style="width:28px"></div>'}
+            </div>`).join('');
+    }
+
+    function addFixedPaymentTemplate() {
+        fixedPaymentTemplates.push({ id: Date.now(), name: 'Fixed Payment', amount: 0 });
+        renderFixedPaymentTemplates();
+    }
+
+    function deleteFixedPaymentTemplate(id) {
+        if (fixedPaymentTemplates.length <= 1) return;
+        fixedPaymentTemplates = fixedPaymentTemplates.filter(t => t.id !== id);
+        renderFixedPaymentTemplates();
+    }
+
+    function updateFixedPaymentTemplate(id, field, value) {
+        const t = fixedPaymentTemplates.find(x => x.id === id);
+        if (!t) return;
+        if (field === 'amount') t.amount = parseFloat(value) || 0;
+        else                    t.name   = value.trim() || t.name;
+    }
+
+    function saveFixedPaymentTemplates() {
+        document.querySelectorAll('#fixedPaymentTemplatesList .p-edit-name').forEach(el => {
+            const id = parseInt(el.closest('.expense-item').querySelector('[oninput]')
+                ?.getAttribute('oninput')?.match(/\d+/)?.[0]);
+            const t = fixedPaymentTemplates.find(x => x.id === id);
+            if (t) t.name = el.value.trim() || t.name;
+        });
+        saveAll();
+        const btn = document.getElementById('btnSaveFixedTemplates');
+        const orig = btn.textContent;
+        btn.textContent = '✓ Saved'; btn.style.background = 'var(--success)'; btn.disabled = true;
+        setTimeout(() => { btn.textContent = orig; btn.style.background = ''; btn.disabled = false; }, 2000);
+    }
+
+    /* ── save toast ── */
+    function showSaveToast(msg = 'Saved ✓') {
+        const el = document.getElementById('saveToast');
+        el.textContent = msg;
+        el.classList.add('show');
+        clearTimeout(saveToastTimer);
+        saveToastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+    }
+
+    /* ── conflict detection ── */
+    function handleConflict() {
+        const reload = confirm(
+            '⚠ Another device saved changes after you last loaded.\n\n' +
+            'OK  →  Load latest data (your unsaved changes will be lost)\n' +
+            'Cancel  →  Keep your data and overwrite'
+        );
+        if (reload) {
+            initStorage().then(ok => {
+                if (ok !== false) { updateMonthYearSelects(); refresh(); }
+            });
+        } else {
+            // Force overwrite — send without syncedAt to bypass conflict check
+            fetch(API, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+                body: JSON.stringify(buildPayload()),
+            }).then(res => {
+                if (res.ok)              { lastSyncedAt = new Date().toISOString(); showSaveToast(); }
+                else if (res.status === 401) handleAuthExpiry();
+            }).catch(() => {});
+        }
+    }
+
+    /* ── split ratio ── */
+    function updateSplitDisplay() {
+        const input = document.getElementById('splitRatioInput');
+        if (!input) return;
+        const val  = Math.min(100, Math.max(0, parseInt(input.value) || 0));
+        const mine = 100 - val;
+        document.getElementById('splitMineDisplay').textContent    = mine + '%';
+        document.getElementById('splitPartnerDisplay').textContent = val  + '%';
+        const lbl = document.getElementById('splitPartnerDisplayLabel');
+        if (lbl) lbl.textContent = partnerName || 'Partner';
+    }
+
+    function saveSplitRatio() {
+        const input = document.getElementById('splitRatioInput');
+        if (!input) return;
+        splitRatio = Math.min(100, Math.max(0, parseInt(input.value) || 50));
+        saveAll();
+        renderSummary();
+        renderRecords();
+        const btn  = document.getElementById('btnSaveSplitRatio');
+        const orig = btn.textContent;
+        btn.textContent = '✓ Saved';
+        btn.style.background = 'var(--success)';
+        btn.disabled = true;
+        setTimeout(() => { btn.textContent = orig; btn.style.background = ''; btn.disabled = false; }, 2000);
+    }
+
 
     /* ── auth ── */
     async function initAuth() {
@@ -2402,6 +2603,7 @@
     function showApp() {
         chartYear = new Date().getFullYear();
         document.getElementById('loginScreen').style.display = 'none';
+        if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
         try {
             const parts   = authToken.split('.');
             const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));

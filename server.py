@@ -15,10 +15,11 @@ HTML          = os.path.join(DIR, 'index.html')
 
 
 def _has_month_data(month_data: dict) -> bool:
-    accounts     = month_data.get('accounts', [])
-    has_expenses = any(bool(a.get('expenses')) for a in accounts)
-    has_personal = bool(month_data.get('personal'))
-    return has_expenses or has_personal
+    accounts         = month_data.get('accounts', [])
+    has_expenses     = any(bool(a.get('expenses')) for a in accounts)
+    has_personal     = bool(month_data.get('personal'))
+    has_fixed        = any((p.get('amount') or 0) > 0 for p in month_data.get('fixedPayments', []))
+    return has_expenses or has_personal or has_fixed
 
 
 def _save_data(parsed: dict) -> None:
@@ -26,10 +27,15 @@ def _save_data(parsed: dict) -> None:
     os.makedirs(DATA_DIR, exist_ok=True)
 
     # --- global settings ---
-    settings = {'currency':         parsed.get('currency', '£'),
-                'mortgage':         parsed.get('mortgage', 0),
-                'recurringCosts':   parsed.get('recurringCosts', []),
-                'accountTemplates': parsed.get('accountTemplates', [])}
+    settings = {'currency':              parsed.get('currency', '£'),
+                'mortgage':              parsed.get('mortgage', 0),
+                'recurringCosts':        parsed.get('recurringCosts', []),
+                'accountTemplates':      parsed.get('accountTemplates', []),
+                'salary':                parsed.get('salary', 0),
+                'fixedPaymentLabel':     parsed.get('fixedPaymentLabel', 'Fixed Payment'),
+                'partnerName':           parsed.get('partnerName', 'Partner'),
+                'splitRatio':            parsed.get('splitRatio', 50),
+                'fixedPaymentTemplates': parsed.get('fixedPaymentTemplates', [])}
     tmp = SETTINGS_FILE + '.tmp'
     with open(tmp, 'w', encoding='utf-8') as f:
         json.dump(settings, f, indent=2)
@@ -70,11 +76,17 @@ def _load_payload() -> dict:
                 month_data[month_key] = json.load(f)
 
     return {
-        'currency':         settings.get('currency', '£'),
-        'mortgage':         settings.get('mortgage', 0),
-        'recurringCosts':   settings.get('recurringCosts', []),
-        'accountTemplates': settings.get('accountTemplates', []),
-        'data':             month_data,
+        'currency':              settings.get('currency', '£'),
+        'mortgage':              settings.get('mortgage', 0),
+        'recurringCosts':        settings.get('recurringCosts', []),
+        'accountTemplates':      settings.get('accountTemplates', []),
+        'salary':                settings.get('salary', 0),
+        'fixedPaymentLabel':     settings.get('fixedPaymentLabel', 'Fixed Payment'),
+        'partnerName':           settings.get('partnerName', 'Partner'),
+        'splitRatio':            settings.get('splitRatio', 50),
+        'fixedPaymentTemplates': settings.get('fixedPaymentTemplates', []),
+        'serverTime':            datetime.datetime.utcnow().isoformat() + 'Z',
+        'data':                  month_data,
     }
 
 

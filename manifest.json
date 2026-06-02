@@ -1,0 +1,17 @@
+{
+  "name": "Monthly Cost Calculator",
+  "short_name": "MonthCalc",
+  "description": "Track and split monthly shared expenses",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d0f18",
+  "theme_color": "#7c6cf8",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
